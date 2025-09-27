@@ -39,10 +39,28 @@ class UtilityFunctions:
         return re.match(pattern, email) is not None
     
     @staticmethod
-    def is_valid_student_number(student_number):
-        """Validate student number format"""
-        pattern = r'^[A-Za-z0-9]{8,20}$'
-        return re.match(pattern, student_number) is not None
+    def is_valid_pdm_student_number(student_number):
+        """Validate PDM student number format: PDM-YYYY-NNNNNN"""
+        import re
+        pattern = r'^PDM-\d{4}-\d{6}$'
+        return re.match(pattern, student_number.upper()) is not None
+    
+    @staticmethod
+    def format_student_number(student_number):
+        """Format student number to PDM standard format"""
+        # Remove any existing hyphens and convert to uppercase
+        cleaned = student_number.replace('-', '').upper()
+        
+        if cleaned.startswith('PDM') and len(cleaned) > 3:
+            year_part = cleaned[3:7] if len(cleaned) > 7 else cleaned[3:]
+            number_part = cleaned[7:13] if len(cleaned) > 7 else "000000"
+            
+            # Pad number part with zeros if needed
+            number_part = number_part.ljust(6, '0')
+            
+            return f"PDM-{year_part}-{number_part}"
+        
+        return student_number.upper()
     
     @staticmethod
     def calculate_fee(document_type_id, quantity=1):

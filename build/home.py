@@ -4,6 +4,9 @@ from document_request import DocumentRequestWindow
 from profile import ProfileWindow
 import sys
 import os
+import tkinter as tk
+from tkinter import messagebox
+import mysql.connector
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -22,44 +25,95 @@ def relative_to_assets(path: str) -> Path:
 
 class HomeWindow:
     def __init__(self, parent, user_data, user_type, logout_callback, get_db_connection):
+        
+        self.logout_callback = logout_callback
         self.parent = parent
         self.user_data = user_data
         self.user_type = user_type
         self.logout_callback = logout_callback
         self.get_db_connection = get_db_connection
+        self.current_content = None
+        
+        # Make window resizable
+        self.parent.resizable(True, True)
+        self.parent.minsize(1000, 600) 
+        
+        # Bind resize event
+        self.parent.bind('<Configure>', self.on_resize)
         
         self.setup_ui()
+        
+    def on_resize(self, event):
+        """Handle window resize events"""
+        if event.widget == self.parent:
+            self.update_layout()
+            
+    def update_layout(self):
+        """Update the layout based on current window size"""
+        if not hasattr(self, "canvas") or not self.canvas.winfo_exists():
+            return  # canvas already destroyed → skip
+
+        width = self.parent.winfo_width()
+        height = self.parent.winfo_height()
+
+        # Update header and main bg
+        self.canvas.coords("header_bg", 0, 0, width, 77)
+        self.canvas.coords("main_bg", 0, 77, width, height)
+        
+        # Update button positions based on window width
+        button_spacing = width * 0.15  # 15% of window width between buttons
+        start_x = width * 0.52
+        
+        self.button_home.place(relx=0.52, rely=0.03, anchor="n")
+        self.button_reqdocu.place(relx=0.67, rely=0.03, anchor="n")
+        self.button_profile.place(relx=0.82, rely=0.03, anchor="n")
+        self.button_logout.place(relx=0.97, rely=0.03, anchor="n")
+        
+        # Update welcome text position
+        self.canvas.coords("welcome_text", 29, 10)
+        self.canvas.coords("user_role", 29, 39)
+        
+        # Update content area
+        if self.current_content == "dashboard":
+            self.show_dashboard()
+        elif self.current_content == "document_request":
+            self.show_document_request()
+        elif self.current_content == "profile":
+            self.show_profile()
         
     def setup_ui(self):
         # Clear previous widgets
         for widget in self.parent.winfo_children():
             widget.destroy()
             
+        # Create main canvas that fills the window
         self.canvas = Canvas(
             self.parent,
             bg="#FFFFFF",
-            height=768,
-            width=1366,
             bd=0,
             highlightthickness=0,
             relief="ridge"
         )
         self.canvas.pack(fill="both", expand=True)
         
-        # Background
-        self.canvas.create_rectangle(0, 0, 1366, 768, fill="#FFA500", outline="")
-        self.canvas.create_rectangle(0, 0, 1366, 77, fill="#800000", outline="")
+        # Get initial window size
+        width = self.parent.winfo_width()
+        height = self.parent.winfo_height()
+        
+        # Create scalable background rectangles
+        self.canvas.create_rectangle(0, 77, width, height, fill="#FFA500", outline="", tags="main_bg")
+        self.canvas.create_rectangle(0, 0, width, 77, fill="#800000", outline="", tags="header_bg")
         
         # Welcome text
         welcome_text = f"Welcome, {self.user_data['first_name']} {self.user_data['last_name']}!"
         user_role = self.user_type.title()
         
         self.canvas.create_text(29, 10, anchor="nw", text=welcome_text, 
-                               fill="#FFD700", font=("Inter Bold", 24))
+                               fill="#FFD700", font=("Inter Bold", 24), tags="welcome_text")
         self.canvas.create_text(29, 39, anchor="nw", text=user_role, 
-                               fill="#FFD700", font=("Inter Bold", 24))
+                               fill="#FFD700", font=("Inter Bold", 24), tags="user_role")
 
-        # Load images
+        # Load images using resource_path
         self.img_reqdocu = PhotoImage(file=relative_to_assets("button_reqdocu.png"))
         self.img_profile = PhotoImage(file=relative_to_assets("button_profile.png"))
         self.img_home = PhotoImage(file=relative_to_assets("button_home.png"))
@@ -72,7 +126,8 @@ class HomeWindow:
             borderwidth=0,
             highlightthickness=0,
             command=self.show_home,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"
         )
 
         self.button_reqdocu = Button(
@@ -81,7 +136,8 @@ class HomeWindow:
             borderwidth=0,
             highlightthickness=0,
             command=self.show_document_request,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"
         )
 
         self.button_profile = Button(
@@ -90,7 +146,8 @@ class HomeWindow:
             borderwidth=0,
             highlightthickness=0,
             command=self.show_profile,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"
         )
 
         self.button_logout = Button(
@@ -99,10 +156,11 @@ class HomeWindow:
             borderwidth=0,
             highlightthickness=0,
             command=self.logout,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"
         )
 
-        # Place buttons
+        # Place buttons with relative positioning
         self.button_home.place(relx=0.52, rely=0.03, anchor="n")
         self.button_reqdocu.place(relx=0.67, rely=0.03, anchor="n")
         self.button_profile.place(relx=0.82, rely=0.03, anchor="n")
@@ -113,27 +171,37 @@ class HomeWindow:
 
     def show_dashboard(self):
         """Show the main dashboard content"""
+        self.current_content = "dashboard"
+        
         # Clear previous content
         for widget in self.parent.winfo_children():
             if widget not in [self.canvas, self.button_home, self.button_reqdocu, 
                             self.button_profile, self.button_logout]:
                 widget.destroy()
         
-        # Dashboard content frame
-        dashboard_frame = Frame(self.parent, bg="#FFFFFF", width=1200, height=600)
-        dashboard_frame.place(relx=0.5, rely=0.55, anchor="center")
+        # Get current window size for responsive layout
+        width = self.parent.winfo_width()
+        height = self.parent.winfo_height()
         
-        # Welcome message
+        # Dashboard content frame with responsive sizing
+        dashboard_frame = Frame(self.parent, bg="#FFFFFF")
+        dashboard_frame.place(relx=0.5, rely=0.55, anchor="center", 
+                            width=min(1200, width * 0.9), 
+                            height=min(600, height * 0.8))
+        
+        # Welcome message with responsive font size
+        font_size = max(20, min(28, int(width / 50)))  # Responsive font size
         welcome_label = Label(
             dashboard_frame,
             text=f"Document Request System Dashboard",
-            font=("Inter Bold", 28),
+            font=("Inter Bold", font_size),
             bg="#FFFFFF",
             fg="#800000"
         )
         welcome_label.pack(pady=20)
         
-        # User info
+        # User info with responsive font size
+        info_font_size = max(10, min(14, int(width / 80)))
         info_text = f"""
         User Information:
         • Name: {self.user_data['first_name']} {self.user_data['last_name']}
@@ -147,7 +215,7 @@ class HomeWindow:
         info_label = Label(
             dashboard_frame,
             text=info_text,
-            font=("Inter", 14),
+            font=("Inter", info_font_size),
             bg="#FFFFFF",
             fg="#000000",
             justify="left"
@@ -155,6 +223,7 @@ class HomeWindow:
         info_label.pack(pady=20)
         
         # Quick actions based on user type
+        action_font_size = max(10, min(12, int(width / 100)))
         if self.user_type == 'student':
             action_text = "Quick Actions:\n• Request a new document\n• View your request history\n• Update your profile information"
         else:
@@ -163,7 +232,7 @@ class HomeWindow:
         action_label = Label(
             dashboard_frame,
             text=action_text,
-            font=("Inter", 12),
+            font=("Inter", action_font_size),
             bg="#FFFFFF",
             fg="#666666",
             justify="left"
@@ -176,30 +245,87 @@ class HomeWindow:
 
     def show_document_request(self):
         """Show document request interface"""
-        from document_request import DocumentRequestWindow
-        # Clear current window
-        for widget in self.parent.winfo_children():
-            widget.destroy()
+        self.current_content = "document_request"
         
-        # Open document request window
-        DocumentRequestWindow(self.parent, self.user_data, self.show_home, self.get_db_connection)
+        # Clear current window content but keep navigation
+        for widget in self.parent.winfo_children():
+            if widget not in [self.canvas, self.button_home, self.button_reqdocu, 
+                            self.button_profile, self.button_logout]:
+                widget.destroy()
+        
+        # Create responsive content area
+        content_frame = Frame(self.parent, bg="#FFFFFF")
+        content_frame.place(relx=0.5, rely=0.55, anchor="center", 
+                          width=min(1200, self.parent.winfo_width() * 0.9), 
+                          height=min(600, self.parent.winfo_height() * 0.8))
+        
+        # Placeholder for document request content
+        placeholder_label = Label(
+            content_frame,
+            text="Document Request Interface\n\nThis area will contain the document request form,\ndocument selection, and request history.",
+            font=("Inter Bold", 18),
+            bg="#FFFFFF",
+            fg="#800000",
+            justify="center"
+        )
+        placeholder_label.pack(expand=True)
+        
+        # You can replace this with your actual DocumentRequestWindow integration
+        # For now, add a back button
+        back_button = Button(
+            content_frame,
+            text="Back to Dashboard",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.show_dashboard,
+            cursor="hand2"
+        )
+        back_button.pack(pady=20)
 
     def show_profile(self):
         """Show user profile"""
-        from profile import ProfileWindow
-        # Clear current window
-        for widget in self.parent.winfo_children():
-            widget.destroy()
+        self.current_content = "profile"
         
-        # Open profile window
-        ProfileWindow(self.parent, self.user_data, self.show_home, self.get_db_connection)
+        # Clear current window content but keep navigation
+        for widget in self.parent.winfo_children():
+            if widget not in [self.canvas, self.button_home, self.button_reqdocu, 
+                            self.button_profile, self.button_logout]:
+                widget.destroy()
+        
+        # Create responsive content area
+        content_frame = Frame(self.parent, bg="#FFFFFF")
+        content_frame.place(relx=0.5, rely=0.55, anchor="center", 
+                          width=min(1200, self.parent.winfo_width() * 0.9), 
+                          height=min(600, self.parent.winfo_height() * 0.8))
+        
+        # Placeholder for profile content
+        placeholder_label = Label(
+            content_frame,
+            text="Profile Management Interface\n\nThis area will contain user profile information,\nedit forms, and account settings.",
+            font=("Inter Bold", 18),
+            bg="#FFFFFF",
+            fg="#800000",
+            justify="center"
+        )
+        placeholder_label.pack(expand=True)
+        
+        # Back button
+        back_button = Button(
+            content_frame,
+            text="Back to Dashboard",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.show_dashboard,
+            cursor="hand2"
+        )
+        back_button.pack(pady=20)
 
     def logout(self):
         """Logout user"""
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
             self.logout_callback()
 
-    def destroy(self):
-        """Clean up the window"""
-        for widget in self.parent.winfo_children():
-            widget.destroy()
+
+

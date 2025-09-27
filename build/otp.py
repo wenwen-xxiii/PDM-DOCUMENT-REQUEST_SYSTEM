@@ -28,7 +28,7 @@ class OTPVerificationWindow:
         self.back_callback = back_callback
         self.get_db_connection = get_db_connection
         self.otp_entries = []
-        self.otp_expiry_time = time.time() + 600  # 10 minutes
+        self.otp_expiry_time = time.time() + 180  # 3 minutes
         
         self.setup_ui()
         self.start_otp_timer()
@@ -118,13 +118,87 @@ class OTPVerificationWindow:
         )
         self.button_back.place(x=624.0, y=16.0, width=30.0, height=30.0)
 
+        # Set tab order for proper navigation
+        self.setup_tab_order()
+
+    def setup_tab_order(self):
+        """Setup proper tab navigation order"""
+        # Set tab order: OTP1 -> OTP2 -> OTP3 -> OTP4 -> OTP5 -> OTP6 -> Verify Button -> Resend Button -> Back Button
+        if len(self.otp_entries) >= 6:
+            for i in range(5):  # Link OTP1 to OTP5 to their next fields
+                self.otp_entries[i].bind('<Tab>', lambda e, idx=i: self.focus_next_otp(e, idx))
+                self.otp_entries[i].bind('<Shift-Tab>', lambda e, idx=i: self.focus_prev_otp(e, idx))
+            
+            # OTP6 should tab to Verify button
+            self.otp_entries[5].bind('<Tab>', lambda e: self.focus_verify_button(e))
+            self.otp_entries[5].bind('<Shift-Tab>', lambda e, idx=4: self.focus_prev_otp(e, idx))
+            
+            # Verify button tab order
+            self.button_verify.bind('<Tab>', self.focus_resend_button)
+            self.button_verify.bind('<Shift-Tab>', lambda e: self.focus_prev_from_verify(e))
+            
+            # Resend button tab order
+            self.buttonLbl_resendotp.bind('<Tab>', self.focus_back_button)
+            self.buttonLbl_resendotp.bind('<Shift-Tab>', lambda e: self.focus_verify_button(e))
+            
+            # Back button tab order
+            self.button_back.bind('<Tab>', lambda e: self.focus_first_otp(e))
+            self.button_back.bind('<Shift-Tab>', lambda e: self.focus_resend_button(e))
+        
+        # Also handle Enter key for quick submission
+        for entry in self.otp_entries:
+            entry.bind('<Return>', lambda e: self.verify_otp())
+        
+        self.button_verify.bind('<Return>', lambda e: self.verify_otp())
+
+    def focus_next_otp(self, event, current_index):
+        """Focus on next OTP field when Tab is pressed"""
+        if current_index < len(self.otp_entries) - 1:
+            self.otp_entries[current_index + 1].focus()
+        return "break"  # Prevent default tab behavior
+
+    def focus_prev_otp(self, event, current_index):
+        """Focus on previous OTP field when Shift+Tab is pressed"""
+        if current_index > 0:
+            self.otp_entries[current_index - 1].focus()
+        return "break"  # Prevent default tab behavior
+
+    def focus_verify_button(self, event):
+        """Focus on verify button"""
+        self.button_verify.focus()
+        return "break"
+
+    def focus_resend_button(self, event):
+        """Focus on resend button"""
+        self.buttonLbl_resendotp.focus()
+        return "break"
+
+    def focus_back_button(self, event):
+        """Focus on back button"""
+        self.button_back.focus()
+        return "break"
+
+    def focus_prev_from_verify(self, event):
+        """Focus on last OTP field from verify button"""
+        if self.otp_entries:
+            self.otp_entries[-1].focus()
+        return "break"
+
+    def focus_first_otp(self, event):
+        """Focus on first OTP field"""
+        if self.otp_entries:
+            self.otp_entries[0].focus()
+        return "break"
+
     def setup_otp_entries(self):
         """Setup the 6 OTP entry fields with proper alignment"""
         # Adjusted positions for better alignment
         entry_positions = [
             (393.0, 237.0), (438.0, 237.0), (483.0, 237.0),
-            (528.0, 237.0), (573.0, 237.0), (618.0, 237.0)  # Fixed y-position to be consistent
+            (528.0, 237.0), (573.0, 237.0), (618.0, 237.0)
         ]
+        
+        vcmd = (self.parent.register(self.validate_numeric), '%P')
         
         entry_images = [
             "entry_otp1.png", "entry_otp2.png", "entry_otp3.png",
@@ -148,15 +222,16 @@ class OTPVerificationWindow:
                 font=("Inter Bold", 16), 
                 justify='center', 
                 width=2,
-                relief="flat"
+                relief="flat",
+                validate='key',
+                validatecommand=vcmd
             )
             
-            # Calculate precise positioning based on the image
-            # Adjust these values based on your actual image sizes
+            # Calculate precise positioning
             entry_width = 24
-            entry_height = 30
-            entry_x = x - (entry_width / 2)  # Center horizontally
-            entry_y = y - (entry_height / 2) + 5  # Center vertically with slight adjustment
+            entry_height = 27
+            entry_x = x - (entry_width / 2)
+            entry_y = y - (entry_height / 2) + 5
             
             entry.place(x=entry_x, y=entry_y, width=entry_width, height=entry_height)
             
@@ -165,6 +240,16 @@ class OTPVerificationWindow:
             entry.bind('<FocusIn>', lambda e, entry=entry: self.on_otp_focusin(entry))
             
             self.otp_entries.append(entry)
+
+        # Focus on first OTP entry when window loads
+        if self.otp_entries:
+            self.parent.after(100, lambda: self.otp_entries[0].focus())
+            
+    def validate_numeric(self, new_value):
+        """Validate that the entry contains only numeric input"""
+        if new_value == "":
+            return True
+        return new_value.isdigit()
 
     def on_otp_keyrelease(self, event, current_index):
         """Handle OTP entry navigation"""
@@ -179,7 +264,8 @@ class OTPVerificationWindow:
             if current_index < len(self.otp_entries) - 1:
                 self.otp_entries[current_index + 1].focus()
             else:
-                entry.focus()  # Stay on last entry
+                # Last OTP field filled, auto-focus verify button
+                self.button_verify.focus()
 
     def on_otp_focusin(self, entry):
         """Select all text when focusing on OTP entry"""
@@ -199,6 +285,11 @@ class OTPVerificationWindow:
         
         if len(entered_otp) != 6:
             messagebox.showerror("Error", "Please enter the complete 6-digit OTP")
+            # Focus on first empty OTP field
+            for i, entry in enumerate(self.otp_entries):
+                if not entry.get():
+                    entry.focus()
+                    break
             return
         
         if entered_otp == self.otp_code:
@@ -206,13 +297,18 @@ class OTPVerificationWindow:
             self.verification_callback()
         else:
             messagebox.showerror("Error", "Invalid OTP. Please try again.")
+            # Clear all fields and focus on first one
+            for entry in self.otp_entries:
+                entry.delete(0, 'end')
+            if self.otp_entries:
+                self.otp_entries[0].focus()
 
     def resend_otp(self):
         """Resend OTP code"""
         from utils import UtilityFunctions, EmailService
         
         self.otp_code = UtilityFunctions.generate_otp()
-        self.otp_expiry_time = time.time() + 600  # Reset to 10 minutes
+        self.otp_expiry_time = time.time() + 180  # Reset to 3 minutes
         
         # Clear OTP entries
         for entry in self.otp_entries:

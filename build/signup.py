@@ -28,6 +28,10 @@ class SignupWindow:
         self.otp_code = None
         self.user_data = None
         
+        # Placeholder texts
+        self.email_placeholder = "example@pdm.edu.ph"
+        self.studentno_placeholder = "PDM-2025-001234"
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -73,10 +77,14 @@ class SignupWindow:
         self.entry_image_1 = PhotoImage(file=relative_to_assets("entry_email.png"))
         self.canvas.create_image(505.5, 121.0, image=self.entry_image_1)
         self.entry_email = Entry(
-            bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
+            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,  # Lighter gray for placeholder
             font=("Inter", 12)
         )
         self.entry_email.place(x=391.0, y=101.0, width=229.0, height=38.0)
+        # Add email placeholder
+        self.entry_email.insert(0, self.email_placeholder)
+        self.entry_email.bind('<FocusIn>', lambda e: self.clear_placeholder(self.entry_email, self.email_placeholder))
+        self.entry_email.bind('<FocusOut>', lambda e: self.restore_placeholder(self.entry_email, self.email_placeholder))
 
         self.canvas.create_text(
             383.0, 79.0, anchor="nw",
@@ -109,10 +117,15 @@ class SignupWindow:
         self.entry_image_3 = PhotoImage(file=relative_to_assets("entry_studentno.png"))
         self.canvas.create_image(505.5, 264.0, image=self.entry_image_3)
         self.entry_studentno = Entry(
-            bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
+            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,  # Lighter gray for placeholder
             font=("Inter", 12)
         )
         self.entry_studentno.place(x=391.0, y=244.0, width=229.0, height=38.0)
+        # Add student number placeholder and format validation
+        self.entry_studentno.insert(0, self.studentno_placeholder)
+        self.entry_studentno.bind('<FocusIn>', lambda e: self.clear_placeholder(self.entry_studentno, self.studentno_placeholder))
+        self.entry_studentno.bind('<FocusOut>', lambda e: self.restore_placeholder(self.entry_studentno, self.studentno_placeholder))
+        self.entry_studentno.bind('<KeyRelease>', self.validate_student_number_format)
         
         # Signup button
         self.button_image_1 = PhotoImage(file=relative_to_assets("button_signup.png"))
@@ -136,26 +149,104 @@ class SignupWindow:
         )
         self.buttonLbl_login.place(x=412.0, y=350.0, width=187.0, height=18.0)
 
+    def clear_placeholder(self, entry, placeholder_text):
+        """Clear placeholder text when entry is focused"""
+        if entry.get() == placeholder_text:
+            entry.delete(0, 'end')
+            entry.config(fg="#000716")  # Normal text color
+            if entry == self.entry_pass:
+                entry.config(show="*")
+
+    def restore_placeholder(self, entry, placeholder_text):
+        """Restore placeholder text when entry loses focus and is empty"""
+        if entry.get().strip() == "":
+            entry.insert(0, placeholder_text)
+            entry.config(fg="#666666")  # Lighter gray for placeholder
+            if entry == self.entry_pass:
+                entry.config(show="")  # Show placeholder text clearly
+
+    def validate_student_number_format(self, event=None):
+        """Validate student number format in real-time"""
+        student_number = self.entry_studentno.get().strip()
+        
+        # Skip validation if it's placeholder text
+        if student_number == self.studentno_placeholder:
+            return
+        
+        # Auto-format as user types
+        if len(student_number) > 0:
+            # Remove any existing hyphens and convert to uppercase
+            cleaned = student_number.replace('-', '').upper()
+            
+            # Auto-format: PDM-YYYY-NNNNNN
+            if cleaned.startswith('PDM') and len(cleaned) > 3:
+                year_part = cleaned[3:7] if len(cleaned) > 7 else cleaned[3:]
+                number_part = cleaned[7:13] if len(cleaned) > 7 else ""
+                
+                formatted = f"PDM-{year_part}"
+                if number_part:
+                    formatted += f"-{number_part}"
+                
+                # Prevent infinite loop by checking if change is needed
+                if formatted != student_number:
+                    current_pos = self.entry_studentno.index('insert')
+                    self.entry_studentno.delete(0, 'end')
+                    self.entry_studentno.insert(0, formatted)
+                    # Try to maintain cursor position
+                    try:
+                        self.entry_studentno.icursor(min(current_pos, len(formatted)))
+                    except:
+                        pass
+            
+            # Validate format and change text color accordingly
+            if student_number and student_number != self.studentno_placeholder:
+                if self.is_valid_pdm_student_number(student_number):
+                    self.entry_studentno.config(fg="#006400")  # Dark green for valid
+                else:
+                    self.entry_studentno.config(fg="#8B0000")  # Dark red for invalid
+
+    def is_valid_pdm_student_number(self, student_number):
+        """Validate PDM student number format: PDM-YYYY-NNNNNN"""
+        import re
+        # Pattern: PDM- followed by 4 digits, then hyphen, then 6 digits
+        pattern = r'^PDM-\d{4}-\d{6}$'
+        return re.match(pattern, student_number.upper()) is not None
+
     def attempt_signup(self):
         email = self.entry_email.get().strip()
         password = self.entry_pass.get().strip()
         student_number = self.entry_studentno.get().strip().upper()
 
+        # Remove placeholder values if they weren't changed
+        if email == self.email_placeholder:
+            email = ""
+        if student_number == self.studentno_placeholder:
+            student_number = ""
+
         # Validation
         if not all([email, password, student_number]):
             messagebox.showerror("Error", "Please fill in all fields")
+            # Restore placeholders for empty fields
+            if not email:
+                self.restore_placeholder(self.entry_email, self.email_placeholder)
+            if not student_number:
+                self.restore_placeholder(self.entry_studentno, self.studentno_placeholder)
             return
 
         if not UtilityFunctions.is_valid_email(email):
             messagebox.showerror("Error", "Please enter a valid email address")
+            self.entry_email.focus()
             return
 
-        if not UtilityFunctions.is_valid_student_number(student_number):
-            messagebox.showerror("Error", "Please enter a valid student number")
+        # Use the new PDM-specific validation
+        if not self.is_valid_pdm_student_number(student_number):
+            messagebox.showerror("Error", "Please enter a valid student number in format: PDM-YYYY-NNNNNN\n\nExample: PDM-2025-001234")
+            self.entry_studentno.focus()
             return
 
         if len(password) < 6:
             messagebox.showerror("Error", "Password must be at least 6 characters long")
+            self.entry_pass.focus()
             return
 
         db_connection = self.get_db_connection()
@@ -261,18 +352,22 @@ class SignupWindow:
             
             user_id = cursor.lastrowid
             
-            # 2. Insert into students table (student-specific data)
+            # Extract year from student number (PDM-2025-001234 -> 2025)
+            admission_year = self.user_data['student_number'].split('-')[1]
+            
+            # 2. Insert into students table with better placeholder data
             cursor.execute("""
-                INSERT INTO students (user_id, student_number, first_name, last_name, course, year_level, enrollment_status) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO students (user_id, student_number, first_name, last_name, course, year_level, enrollment_status, admission_year) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 user_id,
                 self.user_data['student_number'],
-                'Pending',  # Placeholder - would need actual student data
+                'New',  # Placeholder - user will update later
                 'Student',  # Placeholder
-                'To be updated',  # Placeholder
+                'Undecided',  # Placeholder
                 '1st Year',  # Placeholder
-                'Active'
+                'Active',
+                admission_year
             ))
             
             db_connection.commit()

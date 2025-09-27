@@ -31,6 +31,11 @@ class LoginWindow:
         self.setup_ui()
         
     def setup_ui(self):
+        # Clear any existing widgets first
+        for widget in self.parent.winfo_children():
+            widget.destroy()
+        
+        # Create canvas that fits exactly in 670x400
         self.canvas = Canvas(
             self.parent,
             bg="#FFFFFF",
@@ -40,9 +45,9 @@ class LoginWindow:
             highlightthickness=0,
             relief="ridge"
         )
-        self.canvas.place(x=0, y=0)
+        self.canvas.pack(fill="both", expand=True)
         
-        # Background and design elements
+        # Background and design elements - EXACTLY THE SAME as your original design
         self.canvas.create_rectangle(0.0, 0.0, 670.0, 400.0, fill="#FFA500", outline="")
         self.canvas.create_rectangle(0.0, 0.0, 335.0, 400.0, fill="#800000", outline="")
         
@@ -58,33 +63,35 @@ class LoginWindow:
             fill="#FFD700", font=("Inter Bold", 12 * -1)
         )
 
-        # Logo
+        # Logo - EXACTLY THE SAME as your original design
         self.image_image_1 = PhotoImage(file=relative_to_assets("image_logo.png"))
         self.canvas.create_image(164.0, 171.0, image=self.image_image_1)
 
-        # Signup button
+        # Signup button - EXACTLY THE SAME as your original design
         self.button_image_1 = PhotoImage(file=relative_to_assets("buttonLbl_signup.png"))
         self.buttonLbl_signup = Button(
             image=self.button_image_1,
             borderwidth=0,
             highlightthickness=0,
             command=self.show_signup_callback,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"  # Added for better UX
         )
         self.buttonLbl_signup.place(x=430.0, y=326.0, width=158.0, height=18.0)
 
-        # Forgot password button
+        # Forgot password button - EXACTLY THE SAME as your original design
         self.button_image_2 = PhotoImage(file=relative_to_assets("buttonLbl_forgotpass.png"))
         self.buttonLbl_forgotpass = Button(
             image=self.button_image_2,
             borderwidth=0,
             highlightthickness=0,
             command=self.show_forgot_password_callback,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"  # Added for better UX
         )
         self.buttonLbl_forgotpass.place(x=527.0, y=238.0, width=106.0, height=15.0)
 
-        # Username/Email/Student No entry
+        # Username/Email/Student No entry - EXACTLY THE SAME as your original design
         self.entry_image_1 = PhotoImage(file=relative_to_assets("entry_email.png"))
         self.canvas.create_image(505.5, 131.0, image=self.entry_image_1)
         self.entry_username = Entry(
@@ -100,7 +107,7 @@ class LoginWindow:
             fill="#FFFFFF", font=("Inter Bold", 16 * -1)
         )
 
-        # Password entry
+        # Password entry - EXACTLY THE SAME as your original design
         self.entry_image_2 = PhotoImage(file=relative_to_assets("entry_pass.png"))
         self.canvas.create_image(505.5, 209.0, image=self.entry_image_2)
         self.entry_pass = Entry(
@@ -122,16 +129,20 @@ class LoginWindow:
             fill="#FFFFFF", font=("Inter Bold", 32 * -1)
         )
 
-        # Login button
+        # Login button - EXACTLY THE SAME as your original design
         self.button_image_3 = PhotoImage(file=relative_to_assets("button_login.png"))
         self.button_login = Button(
             image=self.button_image_3,
             borderwidth=0,
             highlightthickness=0,
             command=self.attempt_login,
-            relief="flat"
+            relief="flat",
+            cursor="hand2"  # Added for better UX
         )
         self.button_login.place(x=383.0, y=270.0, width=245.0, height=40.0)
+
+        # Set focus to username entry for better UX
+        self.entry_username.focus()
 
     def attempt_login(self):
         username_input = self.entry_username.get().strip()

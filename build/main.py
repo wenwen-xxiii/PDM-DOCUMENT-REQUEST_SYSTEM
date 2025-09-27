@@ -58,6 +58,7 @@ class DocumentRequestSystem:
     
     def resize_window(self, width, height):
         """Resize the window to new dimensions"""
+        print(f"Resizing window to: {width}x{height}")  # Debug
         self.center_window(width, height)
     
     def setup_database(self):
@@ -136,7 +137,12 @@ class DocumentRequestSystem:
     def show_login(self):
         """Show login window and resize to login size"""
         self.clear_window()
-        self.resize_window(*self.login_size)
+        
+        # Set exact window size and make non-resizable
+        self.root.geometry("670x400")
+        self.root.resizable(False, False)
+        self.center_window(670, 400)
+        
         LoginWindow(
             self.root, 
             self.login_success_callback, 
@@ -187,6 +193,12 @@ class DocumentRequestSystem:
         
         self.current_user = None
         self.user_type = None
+        
+        # Force exact size and non-resizable
+        self.root.resizable(False, False)
+        self.root.geometry("670x400")
+        self.center_window(670, 400)
+        
         self.show_login()
     
     def clear_window(self):
@@ -237,8 +249,8 @@ def main():
     if APP_CONFIG['debug']:
         print("🚀 Starting application in DEBUG mode")
         print(f"📊 Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-        print(f"👤 Default Admin: admin@pdm.edu.ph / admin123")
-        print(f"👤 Default Registrar: registrar@pdm.edu.ph / registrar123")
+        print(f"👤 Default Admin: admin / admin123")
+        print(f"👤 Default Registrar: registrar / registrar123")
         print("=" * 60)
     
     try:
