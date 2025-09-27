@@ -1,0 +1,210 @@
+from pathlib import Path
+from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
+import mysql.connector
+from utils import UtilityFunctions
+import sys
+import os
+
+OUTPUT_PATH = Path(__file__).parent
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
+def relative_to_assets(path: str) -> Path:
+    return Path(resource_path(f"resources/assets/frame0/{path}"))
+
+class LoginWindow:
+    def __init__(self, parent, login_callback, show_signup_callback, show_forgot_password_callback, get_db_connection):
+        self.parent = parent
+        self.login_callback = login_callback
+        self.show_signup_callback = show_signup_callback
+        self.show_forgot_password_callback = show_forgot_password_callback
+        self.get_db_connection = get_db_connection
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.canvas = Canvas(
+            self.parent,
+            bg="#FFFFFF",
+            height=400,
+            width=670,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        self.canvas.place(x=0, y=0)
+        
+        # Background and design elements
+        self.canvas.create_rectangle(0.0, 0.0, 670.0, 400.0, fill="#FFA500", outline="")
+        self.canvas.create_rectangle(0.0, 0.0, 335.0, 400.0, fill="#800000", outline="")
+        
+        self.canvas.create_text(
+            51.0, 293.0, anchor="nw",
+            text="Where quality education is a right, not privilege.",
+            fill="#FFFFFF", font=("Inter Italic", 10 * -1)
+        )
+        
+        self.canvas.create_text(
+            41.0, 263.0, anchor="nw",
+            text="PAMBAYANG DALUBHASAAN NG MARILAO",
+            fill="#FFD700", font=("Inter Bold", 12 * -1)
+        )
+
+        # Logo
+        self.image_image_1 = PhotoImage(file=relative_to_assets("image_logo.png"))
+        self.canvas.create_image(164.0, 171.0, image=self.image_image_1)
+
+        # Signup button
+        self.button_image_1 = PhotoImage(file=relative_to_assets("buttonLbl_signup.png"))
+        self.buttonLbl_signup = Button(
+            image=self.button_image_1,
+            borderwidth=0,
+            highlightthickness=0,
+            command=self.show_signup_callback,
+            relief="flat"
+        )
+        self.buttonLbl_signup.place(x=430.0, y=326.0, width=158.0, height=18.0)
+
+        # Forgot password button
+        self.button_image_2 = PhotoImage(file=relative_to_assets("buttonLbl_forgotpass.png"))
+        self.buttonLbl_forgotpass = Button(
+            image=self.button_image_2,
+            borderwidth=0,
+            highlightthickness=0,
+            command=self.show_forgot_password_callback,
+            relief="flat"
+        )
+        self.buttonLbl_forgotpass.place(x=527.0, y=238.0, width=106.0, height=15.0)
+
+        # Username/Email/Student No entry
+        self.entry_image_1 = PhotoImage(file=relative_to_assets("entry_email.png"))
+        self.canvas.create_image(505.5, 131.0, image=self.entry_image_1)
+        self.entry_username = Entry(
+            bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
+            font=("Inter", 12)
+        )
+        self.entry_username.place(x=391.0, y=111.0, width=229.0, height=38.0)
+        self.entry_username.bind('<Return>', lambda e: self.entry_pass.focus())
+
+        self.canvas.create_text(
+            383.0, 89.0, anchor="nw",
+            text="Email or Student No.",
+            fill="#FFFFFF", font=("Inter Bold", 16 * -1)
+        )
+
+        # Password entry
+        self.entry_image_2 = PhotoImage(file=relative_to_assets("entry_pass.png"))
+        self.canvas.create_image(505.5, 209.0, image=self.entry_image_2)
+        self.entry_pass = Entry(
+            bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
+            show="*", font=("Inter", 12)
+        )
+        self.entry_pass.place(x=391.0, y=189.0, width=229.0, height=38.0)
+        self.entry_pass.bind('<Return>', lambda e: self.attempt_login())
+
+        self.canvas.create_text(
+            383.0, 167.0, anchor="nw",
+            text="Password",
+            fill="#FFFFFF", font=("Inter Bold", 16 * -1)
+        )
+
+        self.canvas.create_text(
+            378.0, 24.0, anchor="nw",
+            text="Login",
+            fill="#FFFFFF", font=("Inter Bold", 32 * -1)
+        )
+
+        # Login button
+        self.button_image_3 = PhotoImage(file=relative_to_assets("button_login.png"))
+        self.button_login = Button(
+            image=self.button_image_3,
+            borderwidth=0,
+            highlightthickness=0,
+            command=self.attempt_login,
+            relief="flat"
+        )
+        self.button_login.place(x=383.0, y=270.0, width=245.0, height=40.0)
+
+    def attempt_login(self):
+        username_input = self.entry_username.get().strip()
+        password = self.entry_pass.get().strip()
+
+        if not username_input or not password:
+            messagebox.showerror("Error", "Please enter both username/email and password")
+            return
+
+        db_connection = self.get_db_connection()
+        if not db_connection:
+            messagebox.showerror("Database Error", "Cannot connect to database")
+            return
+
+        try:
+            cursor = db_connection.cursor(dictionary=True)
+            
+            # Determine if input is email or student number
+            if UtilityFunctions.is_valid_email(username_input):
+                # Input is an email - search by email
+                cursor.execute("""
+                    SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
+                    FROM users u 
+                    LEFT JOIN students s ON u.id = s.user_id 
+                    WHERE u.email = %s AND u.is_verified = TRUE AND u.is_active = TRUE
+                """, (username_input,))
+            else:
+                # Input is likely a student number - search by student number or username
+                cursor.execute("""
+                    SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
+                    FROM users u 
+                    LEFT JOIN students s ON u.id = s.user_id 
+                    WHERE (u.username = %s OR s.student_number = %s) 
+                    AND u.is_verified = TRUE AND u.is_active = TRUE
+                """, (username_input, username_input))
+            
+            user = cursor.fetchone()
+
+            if user and UtilityFunctions.verify_password(password, user['password_hash']):
+                # Prepare user data for session
+                user_data = {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'first_name': user.get('first_name', ''),
+                    'last_name': user.get('last_name', ''),
+                    'student_number': user.get('student_number', ''),
+                    'course': user.get('course', ''),
+                    'year_level': user.get('year_level', ''),
+                    'user_type': user['user_type']
+                }
+                
+                # Check if student has outstanding obligations
+                if user['user_type'] == 'student':
+                    from utils import ValidationHelper
+                    if not ValidationHelper.validate_student_clearance(db_connection, user['id']):
+                        messagebox.showerror(
+                            "Clearance Issue", 
+                            "Cannot proceed. You have outstanding obligations. Please contact the registrar's office."
+                        )
+                        return
+
+                self.login_callback(user_data, user['user_type'])
+            else:
+                messagebox.showerror("Login Failed", "Invalid username/email or password")
+
+        except mysql.connector.Error as e:
+            messagebox.showerror("Database Error", f"Login failed: {str(e)}")
+        finally:
+            if db_connection and db_connection.is_connected():
+                cursor.close()
+
+    def destroy(self):
+        """Clean up the window"""
+        for widget in self.parent.winfo_children():
+            widget.destroy()
