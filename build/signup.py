@@ -353,25 +353,69 @@ class SignupWindow:
             user_id = cursor.lastrowid
             
             # Extract year from student number (PDM-2025-001234 -> 2025)
-            admission_year = self.user_data['student_number'].split('-')[1]
+            try:
+                admission_year = self.user_data['student_number'].split('-')[1]
+                # Convert to actual date for date_enrolled
+                from datetime import datetime
+                enrollment_date = datetime(int(admission_year), 6, 1)  # June 1st of admission year
+                expected_graduation = datetime(int(admission_year) + 4, 6, 1)  # 4 years later
+            except (IndexError, ValueError):
+                admission_year = "2024"  # Default fallback
+                enrollment_date = datetime.now()
+                expected_graduation = datetime.now().replace(year=datetime.now().year + 4)
             
-            # 2. Insert into students table with better placeholder data
+            # 2. Insert into students table with normalized structure
             cursor.execute("""
-                INSERT INTO students (user_id, student_number, first_name, last_name, course, year_level, enrollment_status, admission_year) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO students (
+                    user_id, student_number, first_name, last_name, middle_name,
+                    course, year_level, enrollment_status, date_enrolled, expected_graduation
+                ) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 user_id,
                 self.user_data['student_number'],
-                'New',  # Placeholder - user will update later
-                'Student',  # Placeholder
-                'Undecided',  # Placeholder
-                '1st Year',  # Placeholder
+                self.user_data.get('first_name', 'New'),  # Use provided name or placeholder
+                self.user_data.get('last_name', 'Student'),  # Use provided name or placeholder
+                self.user_data.get('middle_name', ''),  # Middle name if provided
+                self.user_data.get('course', 'Undecided'),  # Course if provided
+                self.user_data.get('year_level', '1st Year'),  # Year level if provided
                 'Active',
-                admission_year
+                enrollment_date,
+                expected_graduation
+            ))
+            
+            # 3. Insert initial academic record
+            cursor.execute("""
+                INSERT INTO academic_records (
+                    student_id, course, year_level, semester, academic_year, status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                cursor.lastrowid,  # This gets the student ID just inserted
+                self.user_data.get('course', 'Undecided'),
+                self.user_data.get('year_level', '1st Year'),
+                '1st',  # Default semester
+                f"{admission_year}-{int(admission_year)+1}",  # Academic year format: 2024-2025
+                'Regular'
             ))
             
             db_connection.commit()
-            messagebox.showinfo("Success", "Registration completed successfully!\n\nPlease complete your profile information after login.")
+            
+            # Show success message with login instructions
+            success_message = f"""
+            Registration completed successfully!
+
+            Student Information:
+            • Name: {self.user_data.get('first_name', 'New')} {self.user_data.get('last_name', 'Student')}
+            • Student Number: {self.user_data['student_number']}
+            • Email: {self.user_data['email']}
+            • Username: {self.user_data['username']}
+
+            Please complete your profile information after login.
+            You can now login using your student number or email.
+            """
+            
+            messagebox.showinfo("Success", success_message.strip())
             self.show_login_callback()
             
         except mysql.connector.Error as e:
@@ -384,24 +428,32 @@ class SignupWindow:
             error_message = f"Registration failed: {str(e)}"
             if "Duplicate entry" in str(e):
                 if "email" in str(e):
-                    error_message = "Email already registered"
+                    error_message = "Email already registered. Please use a different email address."
                 elif "student_number" in str(e):
-                    error_message = "Student number already registered"
+                    error_message = "Student number already registered. Please contact the registrar if this is an error."
                 elif "username" in str(e):
-                    error_message = "Username already taken"
+                    error_message = "Username already taken. Please choose a different username."
+                elif "users.username" in str(e):
+                    error_message = "Username already taken. Please choose a different username."
+                elif "users.email" in str(e):
+                    error_message = "Email already registered. Please use a different email address."
+                elif "students.student_number" in str(e):
+                    error_message = "Student number already registered. Please contact the registrar if this is an error."
             
-            messagebox.showerror("Database Error", error_message)
+            messagebox.showerror("Registration Error", error_message)
+            
         except Exception as e:
             try:
                 db_connection.rollback()
                 print("✓ Transaction rolled back due to unexpected error")
             except:
                 pass
-            messagebox.showerror("Error", f"Unexpected error: {str(e)}")
+            messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")
+            
         finally:
             if cursor:
                 cursor.close()
-
+            
     def destroy(self):
         """Clean up the window"""
         for widget in self.parent.winfo_children():
