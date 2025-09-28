@@ -1,7 +1,5 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Button, PhotoImage, Frame, Label, messagebox
-from document_request import DocumentRequestWindow
-from profile import ProfileWindow
 import sys
 import os
 import tkinter as tk
@@ -25,8 +23,6 @@ def relative_to_assets(path: str) -> Path:
 
 class HomeWindow:
     def __init__(self, parent, user_data, user_type, logout_callback, get_db_connection):
-        
-        self.logout_callback = logout_callback
         self.parent = parent
         self.user_data = user_data
         self.user_type = user_type
@@ -61,9 +57,6 @@ class HomeWindow:
         self.canvas.coords("main_bg", 0, 77, width, height)
         
         # Update button positions based on window width
-        button_spacing = width * 0.15  # 15% of window width between buttons
-        start_x = width * 0.52
-        
         self.button_home.place(relx=0.52, rely=0.03, anchor="n")
         self.button_reqdocu.place(relx=0.67, rely=0.03, anchor="n")
         self.button_profile.place(relx=0.82, rely=0.03, anchor="n")
@@ -114,10 +107,16 @@ class HomeWindow:
                                fill="#FFD700", font=("Inter Bold", 24), tags="user_role")
 
         # Load images using resource_path
-        self.img_reqdocu = PhotoImage(file=relative_to_assets("button_reqdocu.png"))
-        self.img_profile = PhotoImage(file=relative_to_assets("button_profile.png"))
-        self.img_home = PhotoImage(file=relative_to_assets("button_home.png"))
-        self.img_logout = PhotoImage(file=relative_to_assets("button_logout.png"))
+        try:
+            self.img_reqdocu = PhotoImage(file=relative_to_assets("button_reqdocu.png"))
+            self.img_profile = PhotoImage(file=relative_to_assets("button_profile.png"))
+            self.img_home = PhotoImage(file=relative_to_assets("button_home.png"))
+            self.img_logout = PhotoImage(file=relative_to_assets("button_logout.png"))
+        except Exception as e:
+            print(f"Error loading images: {e}")
+            # Fallback to text buttons if images fail to load
+            self.create_text_buttons()
+            return
 
         # Create buttons
         self.button_home = Button(
@@ -168,6 +167,58 @@ class HomeWindow:
 
         # Show dashboard content
         self.show_dashboard()
+
+    def create_text_buttons(self):
+        """Create text-based buttons as fallback"""
+        self.button_home = Button(
+            self.parent,
+            text="Home",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.show_home,
+            relief="flat",
+            cursor="hand2"
+        )
+
+        self.button_reqdocu = Button(
+            self.parent,
+            text="Request Doc",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.show_document_request,
+            relief="flat",
+            cursor="hand2"
+        )
+
+        self.button_profile = Button(
+            self.parent,
+            text="Profile",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.show_profile,
+            relief="flat",
+            cursor="hand2"
+        )
+
+        self.button_logout = Button(
+            self.parent,
+            text="Logout",
+            font=("Inter", 12),
+            bg="#800000",
+            fg="#FFFFFF",
+            command=self.logout,
+            relief="flat",
+            cursor="hand2"
+        )
+
+        # Place buttons
+        self.button_home.place(relx=0.52, rely=0.03, anchor="n")
+        self.button_reqdocu.place(relx=0.67, rely=0.03, anchor="n")
+        self.button_profile.place(relx=0.82, rely=0.03, anchor="n")
+        self.button_logout.place(relx=0.97, rely=0.03, anchor="n")
 
     def show_dashboard(self):
         """Show the main dashboard content"""
@@ -270,8 +321,7 @@ class HomeWindow:
         )
         placeholder_label.pack(expand=True)
         
-        # You can replace this with your actual DocumentRequestWindow integration
-        # For now, add a back button
+        # Back button
         back_button = Button(
             content_frame,
             text="Back to Dashboard",
@@ -323,9 +373,11 @@ class HomeWindow:
         back_button.pack(pady=20)
 
     def logout(self):
-        """Logout user"""
+        """Logout user and return to login"""
+        print("Logout button clicked")  # Debug
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            print("User confirmed logout")  # Debug
+            # Simply call the logout callback which will handle window management
             self.logout_callback()
-
-
-
+        else:
+            print("User cancelled logout")  # Debug

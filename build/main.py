@@ -8,6 +8,7 @@ from forgotpass import ForgotPasswordWindow
 from home import HomeWindow
 from config import DB_CONFIG, APP_CONFIG
 import os
+import time
 
 class DocumentRequestSystem:
     def __init__(self):
@@ -26,7 +27,7 @@ class DocumentRequestSystem:
         
         # Set initial window size for login
         self.login_size = (670, 400)
-        self.home_size = (1200, 800)
+        self.home_size = (1000, 600)
         self.current_size = self.login_size
         
         self.center_window(*self.login_size)
@@ -136,13 +137,26 @@ class DocumentRequestSystem:
     
     def show_login(self):
         """Show login window and resize to login size"""
+        print("Showing login window...")  # Debug
         self.clear_window()
         
-        # Set exact window size and make non-resizable
-        self.root.geometry("670x400")
-        self.root.resizable(False, False)
-        self.center_window(670, 400)
+        # First ensure window is in normal mode (not maximized/minimized)
+        self.root.state('normal')  # Ensure window is in normal state
         
+        # Ensure window is not in fullscreen
+        self.root.attributes('-fullscreen', False)
+        
+        # Now resize the window to login size
+        self.root.geometry("670x400")
+        self.center_window(670, 400)
+        self.root.minsize(670, 400)  
+        self.root.resizable(False, False)  # Allow resizing
+        
+        # Give time for window to resize and update
+        self.root.update_idletasks()
+        self.root.update()
+        
+        # Create login window
         LoginWindow(
             self.root, 
             self.login_success_callback, 
@@ -176,8 +190,18 @@ class DocumentRequestSystem:
     
     def show_home(self):
         """Show home window and resize to home size"""
+        print("Showing home window...")  # Debug
         self.clear_window()
-        self.resize_window(*self.home_size)
+        
+        # Resize window for home
+        self.root.geometry("1000x600")
+        self.center_window(1000, 600)
+        self.root.minsize(1000, 600)  # Set minimum size for home
+        self.root.resizable(True, True)
+        # Give time for window to resize
+        self.root.update_idletasks()
+        self.root.update()
+         
         HomeWindow(
             self.root, 
             self.current_user, 
@@ -188,23 +212,36 @@ class DocumentRequestSystem:
     
     def logout(self):
         """Logout user and return to login - resize to login size"""
+        print("Logging out user...")  # Debug
         if self.current_user and APP_CONFIG['debug']:
             print(f"✓ User logged out: {self.current_user['email']}")
         
         self.current_user = None
         self.user_type = None
         
-        # Force exact size and non-resizable
-        self.root.resizable(False, False)
-        self.root.geometry("670x400")
-        self.center_window(670, 400)
+        # Clear any pending operations
+        self.root.after_cancel('all')
         
+        self.root.state('normal')  # Ensure window is in normal state
+        self.root.attributes('-fullscreen', False)  # Exit fullscreen state
+    
+        # Force window update
+        self.root.update_idletasks()
+        
+        # Show login screen
         self.show_login()
     
     def clear_window(self):
         """Clear all widgets from the window"""
+        print("Clearing window...")  # Debug
         for widget in self.root.winfo_children():
-            widget.destroy()
+            try:
+                widget.destroy()
+            except Exception as e:
+                print(f"Error destroying widget: {e}")
+        
+        # Force garbage collection
+        self.root.update_idletasks()
     
     def on_closing(self):
         """Handle application closing"""
@@ -219,9 +256,6 @@ class DocumentRequestSystem:
         try:
             # Set closing protocol
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-            
-            # Make window non-resizable during login phase
-            self.root.resizable(False, False)
             
             # Start the main loop
             self.root.mainloop()
@@ -249,8 +283,6 @@ def main():
     if APP_CONFIG['debug']:
         print("🚀 Starting application in DEBUG mode")
         print(f"📊 Database: {DB_CONFIG['database']}@{DB_CONFIG['host']}")
-        print(f"👤 Default Admin: admin / admin123")
-        print(f"👤 Default Registrar: registrar / registrar123")
         print("=" * 60)
     
     try:
