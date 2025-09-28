@@ -1,3 +1,4 @@
+#signup.py
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
@@ -29,7 +30,7 @@ class SignupWindow:
         self.user_data = None
         
         # Placeholder texts
-        self.email_placeholder = "example@pdm.edu.ph"
+        self.email_placeholder = "example@gmail.ph"
         self.studentno_placeholder = "PDM-2025-001234"
         
         self.setup_ui()
@@ -127,6 +128,8 @@ class SignupWindow:
         self.entry_studentno.bind('<FocusOut>', lambda e: self.restore_placeholder(self.entry_studentno, self.studentno_placeholder))
         self.entry_studentno.bind('<KeyRelease>', self.validate_student_number_format)
         
+        self.entry_studentno.bind('<KeyRelease>', self.force_uppercase_and_validate)
+        
         # Signup button
         self.button_image_1 = PhotoImage(file=relative_to_assets("button_signup.png"))
         self.button_signup = Button(
@@ -168,42 +171,55 @@ class SignupWindow:
     def validate_student_number_format(self, event=None):
         """Validate student number format in real-time"""
         student_number = self.entry_studentno.get().strip()
-        
+
         # Skip validation if it's placeholder text
         if student_number == self.studentno_placeholder:
             return
-        
-        # Auto-format as user types
+
         if len(student_number) > 0:
-            # Remove any existing hyphens and convert to uppercase
-            cleaned = student_number.replace('-', '').upper()
-            
-            # Auto-format: PDM-YYYY-NNNNNN
-            if cleaned.startswith('PDM') and len(cleaned) > 3:
-                year_part = cleaned[3:7] if len(cleaned) > 7 else cleaned[3:]
-                number_part = cleaned[7:13] if len(cleaned) > 7 else ""
-                
+            # Force uppercase immediately
+            student_number = student_number.upper()
+
+            # Remove invalid characters (only allow PDM + digits + hyphen)
+            import re
+            cleaned = re.sub(r'[^A-Z0-9-]', '', student_number)
+
+            # Extract raw digits (ignore user-typed hyphens for parsing)
+            raw = cleaned.replace("-", "")
+
+            if raw.startswith("PDM") and len(raw) > 3:
+                year_part = raw[3:7] if len(raw) > 7 else raw[3:]
+                number_part = raw[7:13] if len(raw) > 7 else ""
+
                 formatted = f"PDM-{year_part}"
-                if number_part:
+
+                # --- Allow second hyphen even if number part is empty ---
+                if cleaned.endswith("-") and not number_part:
+                    formatted += "-"
+                elif number_part:
                     formatted += f"-{number_part}"
-                
-                # Prevent infinite loop by checking if change is needed
-                if formatted != student_number:
+
+                if formatted != cleaned:
                     current_pos = self.entry_studentno.index('insert')
                     self.entry_studentno.delete(0, 'end')
                     self.entry_studentno.insert(0, formatted)
-                    # Try to maintain cursor position
+
+                    # Adjust cursor if hyphen was auto-added
+                    if len(formatted) > len(cleaned):
+                        current_pos += 1
+
                     try:
                         self.entry_studentno.icursor(min(current_pos, len(formatted)))
                     except:
-                        pass
-            
-            # Validate format and change text color accordingly
+                        self.entry_studentno.icursor('end')
+
+            # Validate format and change text color
             if student_number and student_number != self.studentno_placeholder:
                 if self.is_valid_pdm_student_number(student_number):
-                    self.entry_studentno.config(fg="#006400")  # Dark green for valid
+                    self.entry_studentno.config(fg="#006400")  # Dark green valid
                 else:
-                    self.entry_studentno.config(fg="#8B0000")  # Dark red for invalid
+                    self.entry_studentno.config(fg="#8B0000")  # Dark red invalid
+
 
     def is_valid_pdm_student_number(self, student_number):
         """Validate PDM student number format: PDM-YYYY-NNNNNN"""
@@ -211,6 +227,23 @@ class SignupWindow:
         # Pattern: PDM- followed by 4 digits, then hyphen, then 6 digits
         pattern = r'^PDM-\d{4}-\d{6}$'
         return re.match(pattern, student_number.upper()) is not None
+    
+    def force_uppercase_and_validate(self, event=None):
+        """Force uppercase and run validation"""
+        current_text = self.entry_studentno.get()
+        upper_text = current_text.upper()
+
+        if current_text != upper_text:
+            cursor_pos = self.entry_studentno.index("insert")
+            self.entry_studentno.delete(0, "end")
+            self.entry_studentno.insert(0, upper_text)
+            try:
+                self.entry_studentno.icursor(cursor_pos)
+            except:
+                self.entry_studentno.icursor("end")
+
+        # After forcing uppercase, also validate format
+        self.validate_student_number_format()
 
     def attempt_signup(self):
         email = self.entry_email.get().strip()

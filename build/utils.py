@@ -1,4 +1,4 @@
-# utils.py - Updated with real SMTP functionality
+# utils.py
 import hashlib
 import random
 import string
