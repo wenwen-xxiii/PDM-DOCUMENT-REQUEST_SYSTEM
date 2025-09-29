@@ -8,8 +8,20 @@ from signup import SignupWindow
 from forgotpass import ForgotPasswordWindow
 from home import HomeWindow
 from config import DB_CONFIG, APP_CONFIG
-import os
+import os, sys
 import time
+from pathlib import Path
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        base_path = sys._MEIPASS  # PyInstaller temp folder
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def relative_to_assets(path: str) -> Path:
+    return Path(resource_path(f"resources/assets/{path}"))
 
 class DocumentRequestSystem:
     def __init__(self):
@@ -19,12 +31,15 @@ class DocumentRequestSystem:
         
         # Set application icon if exists
         try:
-            icon_path = os.path.join(os.path.dirname(__file__), 'assets', 'icon.ico')
-            if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
+            icon_path = relative_to_assets("PDMICON.ico")
+            if icon_path.exists():
+                self.root.iconbitmap(str(icon_path))
+            else:
+                if APP_CONFIG['debug']:
+                    print(f"⚠️ Icon not found: {icon_path}")
         except Exception as e:
             if APP_CONFIG['debug']:
-                print(f"Icon loading failed: {e}")
+                print(f"⚠️ Icon loading failed: {e}")
         
         # Set initial window size for login
         self.login_size = (670, 400)

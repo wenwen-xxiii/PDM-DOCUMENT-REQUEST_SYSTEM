@@ -29,6 +29,9 @@ class LoginWindow:
         self.show_forgot_password_callback = show_forgot_password_callback
         self.get_db_connection = get_db_connection
         
+        self.button_hidden_img = PhotoImage(file=relative_to_assets("button_hidden.png"))
+        self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -113,7 +116,7 @@ class LoginWindow:
         self.canvas.create_image(505.5, 209.0, image=self.entry_image_2)
         self.entry_pass = Entry(
             bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
-            show="*", font=("Inter", 12)
+            show="●", font=("Inter", 12)
         )
         self.entry_pass.place(x=391.0, y=189.0, width=229.0, height=38.0)
         self.entry_pass.bind('<Return>', lambda e: self.attempt_login())
@@ -129,7 +132,16 @@ class LoginWindow:
             text="Login",
             fill="#FFFFFF", font=("Inter Bold", 32 * -1)
         )
-
+        
+        self.button_toggle_pass = Button(
+            image=self.button_view_img,
+            borderwidth=0, highlightthickness=0,
+            command=lambda: self.toggle_password_visibility(self.entry_pass, self.button_toggle_pass),
+            relief="flat", cursor="hand2"
+        )
+        
+        self.button_toggle_pass.place(x=600.0, y=199.0, width=20.0, height=19.0)
+        
         # Login button - EXACTLY THE SAME as your original design
         self.button_image_3 = PhotoImage(file=relative_to_assets("button_login.png"))
         self.button_login = Button(
@@ -144,6 +156,15 @@ class LoginWindow:
 
         # Set focus to username entry for better UX
         self.entry_username.focus()
+        
+    def toggle_password_visibility(self, entry_widget, button_widget):
+        """Toggle the visibility of the password field"""
+        if entry_widget.cget('show') == "●":
+            entry_widget.config(show="")
+            button_widget.config(image=self.button_hidden_img)
+        else:
+            entry_widget.config(show="●")
+            button_widget.config(image=self.button_view_img)
 
     def attempt_login(self):
         username_input = self.entry_username.get().strip()

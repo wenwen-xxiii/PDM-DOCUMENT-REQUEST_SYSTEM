@@ -30,8 +30,11 @@ class SignupWindow:
         self.user_data = None
         
         # Placeholder texts
-        self.email_placeholder = "example@gmail.ph"
+        self.email_placeholder = "example@gmail.com"
         self.studentno_placeholder = "PDM-2025-001234"
+        
+        self.button_hidden_img = PhotoImage(file=relative_to_assets("button_hidden.png"))   
+        self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
         
         self.setup_ui()
         
@@ -104,7 +107,7 @@ class SignupWindow:
         self.canvas.create_image(505.5, 193.0, image=self.entry_image_2)
         self.entry_pass = Entry(
             bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
-            show="*", font=("Inter", 12)
+            show="●", font=("Inter", 12)
         )
         self.entry_pass.place(x=391.0, y=173.0, width=229.0, height=38.0)
 
@@ -113,6 +116,16 @@ class SignupWindow:
             text="Student No.",
             fill="#FFFFFF", font=("Inter Bold", 16 * -1)
         )
+        
+        # Password toggle button
+        self.button_toggle_pass = Button(
+            image=self.button_view_img,
+            borderwidth=0, highlightthickness=0,
+            command=lambda: self.toggle_password_visibility(self.entry_pass, self.button_toggle_pass),
+            relief="flat", cursor="hand2"
+        )
+        
+        self.button_toggle_pass.place(x=600.0, y=183.0, width=20.0, height=19.0)
 
         # Student number entry
         self.entry_image_3 = PhotoImage(file=relative_to_assets("entry_studentno.png"))
@@ -152,6 +165,15 @@ class SignupWindow:
         )
         self.buttonLbl_login.place(x=412.0, y=350.0, width=187.0, height=18.0)
 
+    def toggle_password_visibility(self, entry_widget, button_widget):
+        """Toggle the visibility of the password field"""
+        if entry_widget.cget('show') == "●":
+            entry_widget.config(show="")
+            button_widget.config(image=self.button_hidden_img)
+        else:
+            entry_widget.config(show="●")
+            button_widget.config(image=self.button_view_img)
+            
     def clear_placeholder(self, entry, placeholder_text):
         """Clear placeholder text when entry is focused"""
         if entry.get() == placeholder_text:

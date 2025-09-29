@@ -11,11 +11,9 @@ OUTPUT_PATH = Path(__file__).parent
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and for PyInstaller"""
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-    
     return os.path.join(base_path, relative_path)
 
 def relative_to_assets(path: str) -> Path:
@@ -27,6 +25,10 @@ class PasswordResetWindow:
         self.user_email = user_email
         self.show_login_callback = show_login_callback
         self.get_db_connection = get_db_connection
+        
+        # Load eye images for toggle
+        self.button_hidden_img = PhotoImage(file=relative_to_assets("button_hidden.png"))
+        self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
         
         self.setup_ui()
         
@@ -45,34 +47,21 @@ class PasswordResetWindow:
         # Background and design elements
         self.canvas.create_rectangle(0.0, 0.0, 670.0, 400.0, fill="#FFA500", outline="")
         self.canvas.create_rectangle(0.0, 0.0, 335.0, 400.0, fill="#800000", outline="")
-        
-        self.canvas.create_text(
-            51.0, 293.0, anchor="nw",
-            text="Where quality education is a right, not privilege.",
-            fill="#FFFFFF", font=("Inter Italic", 10 * -1)
-        )
-        
-        self.canvas.create_text(
-            41.0, 263.0, anchor="nw",
-            text="PAMBAYANG DALUBHASAAN NG MARILAO",
-            fill="#FFD700", font=("Inter Bold", 12 * -1)
-        )
+        self.canvas.create_text(51.0, 293.0, anchor="nw",
+                                text="Where quality education is a right, not privilege.",
+                                fill="#FFFFFF", font=("Inter Italic", 10 * -1))
+        self.canvas.create_text(41.0, 263.0, anchor="nw",
+                                text="PAMBAYANG DALUBHASAAN NG MARILAO",
+                                fill="#FFD700", font=("Inter Bold", 12 * -1))
 
         # Logo
         self.image_image_1 = PhotoImage(file=relative_to_assets("image_logo.png"))
         self.canvas.create_image(164.0, 171.0, image=self.image_image_1)
 
-        self.canvas.create_text(
-            383.0, 133.0, anchor="nw",
-            text="New Password",
-            fill="#FFFFFF", font=("Inter Bold", 16 * -1)
-        )
-
-        self.canvas.create_text(
-            378.0, 62.0, anchor="nw",
-            text="Password Reset",
-            fill="#FFFFFF", font=("Inter Bold", 32 * -1)
-        )
+        self.canvas.create_text(383.0, 133.0, anchor="nw",
+                                text="New Password", fill="#FFFFFF", font=("Inter Bold", 16 * -1))
+        self.canvas.create_text(378.0, 62.0, anchor="nw",
+                                text="Password Reset", fill="#FFFFFF", font=("Inter Bold", 32 * -1))
 
         # Reset password button
         self.button_image_1 = PhotoImage(file=relative_to_assets("button_resetpass.png"))
@@ -90,26 +79,41 @@ class PasswordResetWindow:
         self.canvas.create_image(505.5, 176.0, image=self.entry_image_1)
         self.entry_newpass = Entry(
             bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
-            show="*", font=("Inter", 12)
+            show="●", font=("Inter", 12)
         )
         self.entry_newpass.place(x=391.0, y=156.0, width=229.0, height=38.0)
         self.entry_newpass.bind('<Return>', lambda e: self.entry_confirmpass.focus())
 
-        self.canvas.create_text(
-            383.0, 204.0, anchor="nw",
-            text="Confirm Password",
-            fill="#FFFFFF", font=("Inter Bold", 16 * -1)
+        # New password toggle button
+        self.button_toggle_new = Button(
+            image=self.button_hidden_img,
+            borderwidth=0, highlightthickness=0,
+            command=lambda: self.toggle_password_visibility(self.entry_newpass, self.button_toggle_new),
+            relief="flat", cursor="hand2"
         )
+        self.button_toggle_new.place(x=600.0, y=166.0, width=20.0, height=19.0)
+
+        self.canvas.create_text(383.0, 204.0, anchor="nw",
+                                text="Confirm Password", fill="#FFFFFF", font=("Inter Bold", 16 * -1))
 
         # Confirm password entry
         self.entry_image_2 = PhotoImage(file=relative_to_assets("entry_confirmpass.png"))
         self.canvas.create_image(505.5, 246.0, image=self.entry_image_2)
         self.entry_confirmpass = Entry(
             bd=0, bg="#F5C56E", fg="#000716", highlightthickness=0,
-            show="*", font=("Inter", 12)
+            show="●", font=("Inter", 12)
         )
         self.entry_confirmpass.place(x=391.0, y=226.0, width=229.0, height=38.0)
         self.entry_confirmpass.bind('<Return>', lambda e: self.reset_password())
+
+        # Confirm password toggle button
+        self.button_toggle_confirm = Button(
+            image=self.button_view_img,
+            borderwidth=0, highlightthickness=0,
+            command=lambda: self.toggle_password_visibility(self.entry_confirmpass, self.button_toggle_confirm),
+            relief="flat", cursor="hand2"
+        )
+        self.button_toggle_confirm.place(x=600.0, y=236.0, width=20.0, height=19.0)
 
         # Back button
         self.button_image_2 = PhotoImage(file=relative_to_assets("button_back.png"))
@@ -121,6 +125,15 @@ class PasswordResetWindow:
             relief="flat"
         )
         self.button_back.place(x=624.0, y=16.0, width=30.0, height=30.0)
+
+    def toggle_password_visibility(self, entry_widget, button_widget):
+        """Toggle the visibility of the password field"""
+        if entry_widget.cget('show') == "●":
+            entry_widget.config(show="")
+            button_widget.config(image=self.button_hidden_img)
+        else:
+            entry_widget.config(show="●")
+            button_widget.config(image=self.button_view_img)
 
     def reset_password(self):
         """Reset the user's password"""
@@ -146,24 +159,17 @@ class PasswordResetWindow:
 
         try:
             cursor = db_connection.cursor()
-            
-            # Hash the new password
             hashed_password = UtilityFunctions.hash_password(new_password)
-            
-            # Update password in database
             cursor.execute(
                 "UPDATE users SET password_hash = %s WHERE email = %s",
                 (hashed_password, self.user_email)
             )
-            
             if cursor.rowcount == 0:
                 messagebox.showerror("Error", "Failed to reset password. User not found.")
                 return
-            
             db_connection.commit()
             messagebox.showinfo("Success", "Password reset successfully!")
             self.show_login_callback()
-            
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reset password: {str(e)}")
             db_connection.rollback()
