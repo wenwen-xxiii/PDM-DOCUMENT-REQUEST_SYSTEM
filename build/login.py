@@ -19,7 +19,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def relative_to_assets(path: str) -> Path:
-    return Path(resource_path(f"resources/assets/frame0/{path}"))
+    return Path(resource_path(f"resources/assets/{path}"))
 
 class LoginWindow:
     def __init__(self, parent, login_callback, show_signup_callback, show_forgot_password_callback, get_db_connection):

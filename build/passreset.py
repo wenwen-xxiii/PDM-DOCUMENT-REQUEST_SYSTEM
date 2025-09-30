@@ -17,7 +17,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def relative_to_assets(path: str) -> Path:
-    return Path(resource_path(f"resources/assets/frame2/{path}"))
+    return Path(resource_path(f"resources/assets/{path}"))
 
 class PasswordResetWindow:
     def __init__(self, parent, user_email, show_login_callback, get_db_connection):
