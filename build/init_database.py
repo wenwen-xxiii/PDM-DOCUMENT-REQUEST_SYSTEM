@@ -66,14 +66,14 @@ class DatabaseInitializer:
                     gender ENUM('Male', 'Female', 'Other'),
                     course VARCHAR(100) NOT NULL,
                     year_level ENUM('1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year') NOT NULL,
-                    major VARCHAR(100),
                     contact_number VARCHAR(20),
                     address TEXT,
-                    enrollment_status ENUM('Active', 'Inactive', 'Graduated', 'Transferred') DEFAULT 'Active',
+                    enrollment_status ENUM('Enrolled', 'Inactive', 'Graduated', 'Transferred') DEFAULT 'Enrolled',
                     date_enrolled DATE,
                     expected_graduation DATE,
                     has_obligations BOOLEAN DEFAULT FALSE,
                     obligations_details TEXT,
+                    profile_picture longblob,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
