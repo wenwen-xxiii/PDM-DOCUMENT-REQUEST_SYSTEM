@@ -297,14 +297,18 @@ class DatabaseInitializer:
             
             # Insert document types with codes
             document_types = [
-                ('TOR', 'Transcript of Records', 'Official academic transcript', 250.00, 5, True),
-                ('COE', 'Certificate of Enrollment', 'Current enrollment certification', 100.00, 2, False),
-                ('GMC', 'Good Moral Certificate', 'Certificate of good moral character', 150.00, 3, True),
-                ('HD', 'Honorable Dismissal', 'Transfer credential document', 300.00, 7, True),
-                ('DIPLOMA', 'Diploma', 'Graduation diploma', 500.00, 10, True),
-                ('COR', 'Certificate of Registration', 'Current registration certification', 75.00, 1, False),
-                ('CG', 'Certificate of Grades', 'Current semester grades', 120.00, 2, False)
+                ('COE', 'Certificate of Enrollment', 'Current enrollment or registration certification', 100.00, 2, True),
+                ('CG', 'Certificate of Grades', 'Current semester grades', 120.00, 2, False),
+                ('DIPLOMA', 'Diploma (True Copy)', 'Graduation diploma', 500.00, 10, True),
+                ('TOR', 'Transcript of Records (TOR)', 'Official academic transcript', 250.00, 5, True),
+                ('CGrad', 'Certificate of Graduation/Completion', 'Proof of graduation or course completion', 200.00, 3, True),
+                ('GMC', 'Certificate of Good Moral Character', 'Certificate of good moral character', 150.00, 3, True),
+                ('HD', 'Honorable Dismissal/Transfer Credentials', 'Transfer or honorable dismissal document', 300.00, 7, True),
+                ('RL', 'Recommendation Letter', 'Recommendation from faculty or school', 100.00, 2, False),
+                ('CUE', 'Certificate of Units Earned', 'Document showing units earned', 150.00, 3, True),
+                ('CL', 'Clearance', 'School clearance document', 50.00, 1, True)
             ]
+
             
             cursor.executemany("""
                 INSERT IGNORE INTO document_types (code, name, description, fee_amount, processing_days, requires_clearance, created_by) 

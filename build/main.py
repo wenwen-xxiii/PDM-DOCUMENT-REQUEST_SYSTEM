@@ -43,7 +43,7 @@ class DocumentRequestSystem:
         
         # Set initial window size for login
         self.login_size = (670, 400)
-        self.home_size = (1280, 720)
+        self.home_size = (1270, 790)
         self.current_size = self.login_size
         
         self.center_window(*self.login_size)
@@ -211,8 +211,8 @@ class DocumentRequestSystem:
         
         # Resize window for home
         self.root.geometry("1280x720")
-        self.center_window(1280, 720)
-        self.root.minsize(1280, 720)  # Set minimum size for home
+        self.center_window(1270, 790)
+        self.root.minsize(1270, 790)  # Set minimum size for home
         self.root.resizable(True, True)
         # Give time for window to resize
         self.root.update_idletasks()
