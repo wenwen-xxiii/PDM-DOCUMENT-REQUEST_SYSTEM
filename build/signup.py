@@ -1,4 +1,4 @@
-#signup.py
+# signup.py
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
@@ -6,6 +6,8 @@ from utils import UtilityFunctions, EmailService
 from otp import OTPVerificationWindow
 import sys
 import os
+import re
+from datetime import datetime
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -81,11 +83,10 @@ class SignupWindow:
         self.entry_image_1 = PhotoImage(file=relative_to_assets("entry_email.png"))
         self.canvas.create_image(505.5, 121.0, image=self.entry_image_1)
         self.entry_email = Entry(
-            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,  # Lighter gray for placeholder
+            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,
             font=("Inter", 12)
         )
         self.entry_email.place(x=391.0, y=101.0, width=229.0, height=38.0)
-        # Add email placeholder
         self.entry_email.insert(0, self.email_placeholder)
         self.entry_email.bind('<FocusIn>', lambda e: self.clear_placeholder(self.entry_email, self.email_placeholder))
         self.entry_email.bind('<FocusOut>', lambda e: self.restore_placeholder(self.entry_email, self.email_placeholder))
@@ -124,23 +125,19 @@ class SignupWindow:
             command=lambda: self.toggle_password_visibility(self.entry_pass, self.button_toggle_pass),
             relief="flat", cursor="hand2"
         )
-        
         self.button_toggle_pass.place(x=600.0, y=183.0, width=20.0, height=19.0)
 
         # Student number entry
         self.entry_image_3 = PhotoImage(file=relative_to_assets("entry_studentno.png"))
         self.canvas.create_image(505.5, 264.0, image=self.entry_image_3)
         self.entry_studentno = Entry(
-            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,  # Lighter gray for placeholder
+            bd=0, bg="#F5C56E", fg="#666666", highlightthickness=0,
             font=("Inter", 12)
         )
         self.entry_studentno.place(x=391.0, y=244.0, width=229.0, height=38.0)
-        # Add student number placeholder and format validation
         self.entry_studentno.insert(0, self.studentno_placeholder)
         self.entry_studentno.bind('<FocusIn>', lambda e: self.clear_placeholder(self.entry_studentno, self.studentno_placeholder))
         self.entry_studentno.bind('<FocusOut>', lambda e: self.restore_placeholder(self.entry_studentno, self.studentno_placeholder))
-        self.entry_studentno.bind('<KeyRelease>', self.validate_student_number_format)
-        
         self.entry_studentno.bind('<KeyRelease>', self.force_uppercase_and_validate)
         
         # Signup button
@@ -178,7 +175,7 @@ class SignupWindow:
         """Clear placeholder text when entry is focused"""
         if entry.get() == placeholder_text:
             entry.delete(0, 'end')
-            entry.config(fg="#000716")  # Normal text color
+            entry.config(fg="#000716")
             if entry == self.entry_pass:
                 entry.config(show="*")
 
@@ -186,67 +183,12 @@ class SignupWindow:
         """Restore placeholder text when entry loses focus and is empty"""
         if entry.get().strip() == "":
             entry.insert(0, placeholder_text)
-            entry.config(fg="#666666")  # Lighter gray for placeholder
+            entry.config(fg="#666666")
             if entry == self.entry_pass:
-                entry.config(show="")  # Show placeholder text clearly
-
-    def validate_student_number_format(self, event=None):
-        """Validate student number format in real-time"""
-        student_number = self.entry_studentno.get().strip()
-
-        # Skip validation if it's placeholder text
-        if student_number == self.studentno_placeholder:
-            return
-
-        if len(student_number) > 0:
-            # Force uppercase immediately
-            student_number = student_number.upper()
-
-            # Remove invalid characters (only allow PDM + digits + hyphen)
-            import re
-            cleaned = re.sub(r'[^A-Z0-9-]', '', student_number)
-
-            # Extract raw digits (ignore user-typed hyphens for parsing)
-            raw = cleaned.replace("-", "")
-
-            if raw.startswith("PDM") and len(raw) > 3:
-                year_part = raw[3:7] if len(raw) > 7 else raw[3:]
-                number_part = raw[7:13] if len(raw) > 7 else ""
-
-                formatted = f"PDM-{year_part}"
-
-                # --- Allow second hyphen even if number part is empty ---
-                if cleaned.endswith("-") and not number_part:
-                    formatted += "-"
-                elif number_part:
-                    formatted += f"-{number_part}"
-
-                if formatted != cleaned:
-                    current_pos = self.entry_studentno.index('insert')
-                    self.entry_studentno.delete(0, 'end')
-                    self.entry_studentno.insert(0, formatted)
-
-                    # Adjust cursor if hyphen was auto-added
-                    if len(formatted) > len(cleaned):
-                        current_pos += 1
-
-                    try:
-                        self.entry_studentno.icursor(min(current_pos, len(formatted)))
-                    except:
-                        self.entry_studentno.icursor('end')
-
-            # Validate format and change text color
-            if student_number and student_number != self.studentno_placeholder:
-                if self.is_valid_pdm_student_number(student_number):
-                    self.entry_studentno.config(fg="#006400")  # Dark green valid
-                else:
-                    self.entry_studentno.config(fg="#8B0000")  # Dark red invalid
-
+                entry.config(show="")
 
     def is_valid_pdm_student_number(self, student_number):
         """Validate PDM student number format: PDM-YYYY-NNNNNN"""
-        import re
-        # Pattern: PDM- followed by 4 digits, then hyphen, then 6 digits
         pattern = r'^PDM-\d{4}-\d{6}$'
         return re.match(pattern, student_number.upper()) is not None
     
@@ -264,10 +206,49 @@ class SignupWindow:
             except:
                 self.entry_studentno.icursor("end")
 
-        # After forcing uppercase, also validate format
         self.validate_student_number_format()
 
+    def validate_student_number_format(self, event=None):
+        """Validate student number format in real-time"""
+        student_number = self.entry_studentno.get().strip()
+
+        if student_number == self.studentno_placeholder:
+            return
+
+        if len(student_number) > 0:
+            student_number = student_number.upper()
+            cleaned = re.sub(r'[^A-Z0-9-]', '', student_number)
+            raw = cleaned.replace("-", "")
+
+            if raw.startswith("PDM") and len(raw) > 3:
+                year_part = raw[3:7] if len(raw) > 7 else raw[3:]
+                number_part = raw[7:13] if len(raw) > 7 else ""
+
+                formatted = f"PDM-{year_part}"
+
+                if cleaned.endswith("-") and not number_part:
+                    formatted += "-"
+                elif number_part:
+                    formatted += f"-{number_part}"
+
+                if formatted != cleaned:
+                    current_pos = self.entry_studentno.index('insert')
+                    self.entry_studentno.delete(0, 'end')
+                    self.entry_studentno.insert(0, formatted)
+
+                    try:
+                        self.entry_studentno.icursor(min(current_pos, len(formatted)))
+                    except:
+                        self.entry_studentno.icursor('end')
+
+            if student_number and student_number != self.studentno_placeholder:
+                if self.is_valid_pdm_student_number(student_number):
+                    self.entry_studentno.config(fg="#006400")
+                else:
+                    self.entry_studentno.config(fg="#8B0000")
+
     def attempt_signup(self):
+        """Attempt to sign up the user"""
         email = self.entry_email.get().strip()
         password = self.entry_pass.get().strip()
         student_number = self.entry_studentno.get().strip().upper()
@@ -281,7 +262,6 @@ class SignupWindow:
         # Validation
         if not all([email, password, student_number]):
             messagebox.showerror("Error", "Please fill in all fields")
-            # Restore placeholders for empty fields
             if not email:
                 self.restore_placeholder(self.entry_email, self.email_placeholder)
             if not student_number:
@@ -293,9 +273,11 @@ class SignupWindow:
             self.entry_email.focus()
             return
 
-        # Use the new PDM-specific validation
         if not self.is_valid_pdm_student_number(student_number):
-            messagebox.showerror("Error", "Please enter a valid student number in format: PDM-YYYY-NNNNNN\n\nExample: PDM-2025-001234")
+            messagebox.showerror(
+                "Error",
+                "Please enter a valid student number in format: PDM-YYYY-NNNNNN\n\nExample: PDM-2025-001234"
+            )
             self.entry_studentno.focus()
             return
 
@@ -312,26 +294,21 @@ class SignupWindow:
         try:
             cursor = db_connection.cursor(dictionary=True)
 
-            # Check if email or username already exists in users table
-            cursor.execute(
-                "SELECT * FROM users WHERE email = %s OR username = %s",
-                (email, student_number)
-            )
-            existing_user = cursor.fetchone()
-
-            if existing_user:
-                messagebox.showerror("Error", "Email or student number already registered")
+            # Check if email already exists in users table
+            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            if cursor.fetchone():
+                messagebox.showerror("Error", "Email already registered")
                 return
 
-            # Check if student number already exists in students table
-            cursor.execute(
-                "SELECT * FROM students WHERE student_number = %s",
-                (student_number,)
-            )
-            existing_student = cursor.fetchone()
+            # Check if student number exists and is not already linked
+            cursor.execute("SELECT id, user_id FROM students WHERE student_number = %s", (student_number,))
+            student_record = cursor.fetchone()
 
-            if existing_student:
-                messagebox.showerror("Error", "Student number already registered")
+            if student_record and student_record['user_id']:
+                messagebox.showerror(
+                    "Error",
+                    "This student number is already linked to an existing account. Please login or contact the registrar."
+                )
                 return
 
             # Generate OTP and store temporary user data
@@ -340,7 +317,7 @@ class SignupWindow:
                 'email': email,
                 'password': password,
                 'student_number': student_number,
-                'username': student_number  # Use student number as username
+                'username': student_number
             }
 
             # Send OTP email
@@ -377,15 +354,14 @@ class SignupWindow:
 
         cursor = None
         try:
-            cursor = db_connection.cursor()
+            cursor = db_connection.cursor(dictionary=True)
             
-            # Check if there's an active transaction and rollback if needed
+            # Check for active transaction and rollback if needed
             try:
                 if db_connection.in_transaction:
                     db_connection.rollback()
-                    print("✓ Rolled back existing transaction")
             except:
-                pass  # Some MySQL connectors don't have in_transaction attribute
+                pass
             
             # Hash password
             hashed_password = UtilityFunctions.hash_password(self.user_data['password'])
@@ -407,66 +383,93 @@ class SignupWindow:
             
             user_id = cursor.lastrowid
             
-            # Extract year from student number (PDM-2025-001234 -> 2025)
+            # Extract year from student number for enrollment date
             try:
                 admission_year = self.user_data['student_number'].split('-')[1]
-                # Convert to actual date for date_enrolled
-                from datetime import datetime
-                enrollment_date = datetime(int(admission_year), 6, 1)  # June 1st of admission year
-                expected_graduation = datetime(int(admission_year) + 4, 6, 1)  # 4 years later
+                enrollment_date = datetime(int(admission_year), 6, 1)
             except (IndexError, ValueError):
-                admission_year = "2024"  # Default fallback
+                admission_year = "2025"
                 enrollment_date = datetime.now()
-                expected_graduation = datetime.now().replace(year=datetime.now().year + 4)
             
-            # 2. Insert into students table with normalized structure
+            # 2. Check if student record already exists without user_id
             cursor.execute("""
-                INSERT INTO students (
-                    user_id, student_number, first_name, last_name, middle_name,
-                    course, year_level, enrollment_status, date_enrolled, expected_graduation
-                ) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                user_id,
-                self.user_data['student_number'],
-                self.user_data.get('first_name', 'New'),  # Use provided name or placeholder
-                self.user_data.get('last_name', 'Student'),  # Use provided name or placeholder
-                self.user_data.get('middle_name', ''),  # Middle name if provided
-                self.user_data.get('course', 'Undecided'),  # Course if provided
-                self.user_data.get('year_level', '1st Year'),  # Year level if provided
-                'Active',
-                enrollment_date,
-                expected_graduation
-            ))
+                SELECT id, first_name, last_name, middle_name, course, year_level 
+                FROM students 
+                WHERE student_number = %s AND user_id IS NULL
+            """, (self.user_data['student_number'],))
+            
+            existing_student = cursor.fetchone()
+            
+            if existing_student:
+                # Link existing student record to the new user account
+                cursor.execute("""
+                    UPDATE students 
+                    SET user_id = %s, date_enrolled = %s 
+                    WHERE id = %s
+                """, (user_id, enrollment_date, existing_student['id']))
+                
+                student_id = existing_student['id']
+                first_name = existing_student['first_name']
+                last_name = existing_student['last_name']
+                middle_name = existing_student['middle_name']
+                course = existing_student['course']
+                year_level = existing_student['year_level']
+            else:
+                # Insert new student record
+                first_name = 'New'
+                last_name = 'Student'
+                middle_name = ''
+                course = 'Undecided'
+                year_level = '1st Year'
+
+                cursor.execute("""
+                    INSERT INTO students (
+                        user_id, student_number, first_name, last_name, middle_name,
+                        course, year_level, enrollment_status, date_enrolled
+                    ) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    user_id,
+                    self.user_data['student_number'],
+                    first_name,
+                    last_name,
+                    middle_name,
+                    course,
+                    year_level,
+                    'Enrolled',
+                    enrollment_date
+                ))
+                student_id = cursor.lastrowid
             
             # 3. Insert initial academic record
+            academic_year = f"{admission_year}-{int(admission_year)+1}"
             cursor.execute("""
                 INSERT INTO academic_records (
                     student_id, course, year_level, semester, academic_year, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                cursor.lastrowid,  # This gets the student ID just inserted
-                self.user_data.get('course', 'Undecided'),
-                self.user_data.get('year_level', '1st Year'),
-                '1st',  # Default semester
-                f"{admission_year}-{int(admission_year)+1}",  # Academic year format: 2024-2025
+                student_id,
+                course,
+                year_level,
+                '1st',
+                academic_year,
                 'Regular'
             ))
             
             db_connection.commit()
             
-            # Show success message with login instructions
+            # Show success message
             success_message = f"""
             Registration completed successfully!
 
             Student Information:
-            • Name: {self.user_data.get('first_name', 'New')} {self.user_data.get('last_name', 'Student')}
+            • Name: {first_name} {last_name}
             • Student Number: {self.user_data['student_number']}
             • Email: {self.user_data['email']}
-            • Username: {self.user_data['username']}
+            • Course: {course}
+            • Year Level: {year_level}
 
-            Please complete your profile information after login.
             You can now login using your student number or email.
             """
             
@@ -476,7 +479,6 @@ class SignupWindow:
         except mysql.connector.Error as e:
             try:
                 db_connection.rollback()
-                print("✓ Transaction rolled back due to error")
             except:
                 pass
             
@@ -488,19 +490,12 @@ class SignupWindow:
                     error_message = "Student number already registered. Please contact the registrar if this is an error."
                 elif "username" in str(e):
                     error_message = "Username already taken. Please choose a different username."
-                elif "users.username" in str(e):
-                    error_message = "Username already taken. Please choose a different username."
-                elif "users.email" in str(e):
-                    error_message = "Email already registered. Please use a different email address."
-                elif "students.student_number" in str(e):
-                    error_message = "Student number already registered. Please contact the registrar if this is an error."
             
             messagebox.showerror("Registration Error", error_message)
             
         except Exception as e:
             try:
                 db_connection.rollback()
-                print("✓ Transaction rolled back due to unexpected error")
             except:
                 pass
             messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")

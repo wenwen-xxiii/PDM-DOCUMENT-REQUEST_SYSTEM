@@ -94,6 +94,122 @@ class ProfileWindow:
         # Setup buttons (with adjusted positions)
         self.setup_buttons()
 
+    def proper_case_name(self, name):
+        """Convert name to proper case handling special cases"""
+        if not name:
+            return ""
+        
+        # List of common prefixes and particles that should be handled specially
+        lowercase_particles = {'de', 'del', 'de la', 'van', 'von', 'y', 'e', 'di', 'da', 'dos', 'das', 'do'}
+        uppercase_particles = {'II', 'III', 'IV', 'V', 'VI', 'JR', 'SR', 'IIII'}
+        
+        # Split the name into parts
+        parts = name.split()
+        proper_parts = []
+        
+        for i, part in enumerate(parts):
+            part = part.strip()
+            if not part:
+                continue
+                
+            # Handle particles and special cases
+            part_lower = part.lower()
+            if part_lower in lowercase_particles:
+                # Keep particles in lowercase unless they're at the start
+                if i == 0:
+                    proper_parts.append(part.title())
+                else:
+                    proper_parts.append(part_lower)
+            elif part.upper() in uppercase_particles:
+                # Keep roman numerals and suffixes in uppercase
+                proper_parts.append(part.upper())
+            elif "'" in part or "-" in part:
+                # Handle names with apostrophes or hyphens (like O'Connor, Smith-Jones)
+                if "-" in part:
+                    # Handle hyphenated names
+                    hyphen_parts = part.split('-')
+                    proper_hyphen_parts = []
+                    for hp in hyphen_parts:
+                        if hp.lower() in lowercase_particles:
+                            proper_hyphen_parts.append(hp.lower())
+                        else:
+                            proper_hyphen_parts.append(hp.capitalize())
+                    proper_parts.append('-'.join(proper_hyphen_parts))
+                elif "'" in part:
+                    # Handle names with apostrophes
+                    apostrophe_parts = part.split("'")
+                    proper_apostrophe_parts = []
+                    for ap in apostrophe_parts:
+                        if ap:
+                            proper_apostrophe_parts.append(ap.capitalize())
+                        else:
+                            proper_apostrophe_parts.append("'")
+                    proper_parts.append("'".join(proper_apostrophe_parts))
+                else:
+                    proper_parts.append(part.capitalize())
+            else:
+                # Standard capitalization for regular names
+                proper_parts.append(part.capitalize())
+        
+        return ' '.join(proper_parts)
+
+    def format_display_name(self, first_name, middle_name, last_name):
+        """Format name for display: Firstname MiddleInitial. Lastname with proper casing"""
+        if not first_name:
+            return ""
+        
+        # Apply proper casing to all name components
+        first_name = self.proper_case_name(first_name)
+        middle_name = self.proper_case_name(middle_name)
+        last_name = self.proper_case_name(last_name)
+        
+        display_name = first_name
+        
+        if middle_name:
+            # Get first character of middle name and add period
+            middle_initial = middle_name[0].upper() + "."
+            display_name += f" {middle_initial}"
+        
+        if last_name:
+            display_name += f" {last_name}"
+            
+        return display_name
+
+    def parse_full_name(self, full_name):
+        """Parse full name into first, middle, and last names with proper casing"""
+        name_parts = full_name.strip().split()
+        
+        if len(name_parts) == 0:
+            return "", "", ""
+        elif len(name_parts) == 1:
+            return self.proper_case_name(name_parts[0]), "", ""
+        elif len(name_parts) == 2:
+            return (self.proper_case_name(name_parts[0]), 
+                    "", 
+                    self.proper_case_name(name_parts[1]))
+        else:
+            # First name, middle name(s), last name
+            first_name = self.proper_case_name(name_parts[0])
+            last_name = self.proper_case_name(name_parts[-1])
+            middle_name = " ".join(name_parts[1:-1])
+            middle_name = self.proper_case_name(middle_name)
+            return first_name, middle_name, last_name
+
+    def calculate_font_size(self, name):
+        """Calculate adaptive font size based on name length"""
+        name_length = len(name)
+        
+        if name_length <= 15:
+            return 24
+        elif name_length <= 20:
+            return 20
+        elif name_length <= 25:
+            return 18
+        elif name_length <= 30:
+            return 16
+        else:
+            return 14
+
     def setup_profile_picture(self):
         """Setup profile picture with border and upload functionality"""
         def center_crop(img: Image.Image) -> Image.Image:
@@ -117,10 +233,24 @@ class ProfileWindow:
         )
         self.image_profilepic_id = self.canvas.create_image(x, y, image=self.profile_pic)
 
-        # Student Name display (adjusted y from 355 to 215)
-        student_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
-        self.name_display_id = self.canvas.create_text(144.0, 215.0, anchor="nw", text=student_name, 
-                               fill="#000000", font=("Inter", 24 * -1), tags="student_name")
+        # Student Name display (adjusted y from 355 to 215) - CENTERED position
+        display_name = self.format_display_name(
+            self.user_data.get('first_name', ''),
+            self.user_data.get('middle_name', ''),
+            self.user_data.get('last_name', '')
+        )
+        # Calculate adaptive font size
+        font_size = self.calculate_font_size(display_name)
+        
+        # Center position for name (x=230, y=215)
+        self.name_display_id = self.canvas.create_text(
+            230.0, 215.0, 
+            anchor="center",  # Center anchor for proper centering
+            text=display_name, 
+            fill="#000000", 
+            font=("Inter", font_size * -1), 
+            tags="student_name"
+        )
 
         # Name entry field background (always visible but entry field will be shown only during edit)
         try:
@@ -490,11 +620,12 @@ class ProfileWindow:
                 self.entry_fullname = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                           relief="flat", bg="#FFF1C2", font=("Inter", 14),
                                           justify="center")
-                # Populate with current name
-                full_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
+                # Populate with full name for editing
+                full_name = self.get_full_name_for_editing()
                 self.entry_fullname.delete(0, 'end')
                 self.entry_fullname.insert(0, full_name)
             
+            # Center the entry field in the same position as the display name
             self.entry_fullname.place(x=120.0, y=202.0, width=220.0, height=38.0)
         else:
             # Hide the entry field and show the name display text
@@ -521,6 +652,22 @@ class ProfileWindow:
         for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 
                      self.course, self.year_level, self.enrollment_status]:
             combo.config(state=combo_state)
+
+    def get_full_name_for_editing(self):
+        """Get full name in format for editing: Firstname Middlename Lastname"""
+        first_name = self.user_data.get('first_name', '')
+        middle_name = self.user_data.get('middle_name', '')
+        last_name = self.user_data.get('last_name', '')
+        
+        name_parts = []
+        if first_name:
+            name_parts.append(first_name)
+        if middle_name:
+            name_parts.append(middle_name)
+        if last_name:
+            name_parts.append(last_name)
+            
+        return " ".join(name_parts)
 
     def load_user_data(self):
         """Load user data from database into the form fields"""
@@ -621,14 +768,9 @@ class ProfileWindow:
             connection = self.get_db_connection()
             cursor = connection.cursor()
 
-            # Parse full name from the entry field
+            # Parse full name from the entry field with proper casing
             full_name = self.entry_fullname.get().strip()
-            name_parts = full_name.split(' ', 1)  # Split into first name and rest
-            if len(name_parts) == 2:
-                first_name, last_name = name_parts
-            else:
-                first_name = full_name
-                last_name = ""
+            first_name, middle_name, last_name = self.parse_full_name(full_name)
 
             # Parse date of birth
             birth_date = None
@@ -643,6 +785,7 @@ class ProfileWindow:
             cursor.execute("""
                 UPDATE students 
                 SET first_name = %s,
+                    middle_name = %s,
                     last_name = %s,
                     contact_number = %s,
                     address = %s,
@@ -654,6 +797,7 @@ class ProfileWindow:
                 WHERE student_number = %s
             """, (
                 first_name,
+                middle_name,
                 last_name,
                 self.entry_contact.get(),
                 self.entry_address.get(),
@@ -680,6 +824,7 @@ class ProfileWindow:
             # Update local user data
             self.user_data.update({
                 'first_name': first_name,
+                'middle_name': middle_name,
                 'last_name': last_name,
                 'email': self.entry_email.get(),
                 'contact_number': self.entry_contact.get(),
@@ -701,14 +846,9 @@ class ProfileWindow:
     def save_to_memory(self):
         """Save data to memory when database is not available"""
         try:
-            # Parse full name from the entry field
+            # Parse full name from the entry field with proper casing
             full_name = self.entry_fullname.get().strip()
-            name_parts = full_name.split(' ', 1)
-            if len(name_parts) == 2:
-                first_name, last_name = name_parts
-            else:
-                first_name = full_name
-                last_name = ""
+            first_name, middle_name, last_name = self.parse_full_name(full_name)
 
             # Parse date of birth
             birth_date = None
@@ -722,6 +862,7 @@ class ProfileWindow:
             # Update user data
             self.user_data.update({
                 'first_name': first_name,
+                'middle_name': middle_name,
                 'last_name': last_name,
                 'student_number': self.entry_studentno.get(),
                 'email': self.entry_email.get(),
@@ -741,9 +882,18 @@ class ProfileWindow:
             return False
 
     def update_name_display(self):
-        """Update the name display on the profile"""
-        student_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
-        self.canvas.itemconfig(self.name_display_id, text=student_name)
+        """Update the name display on the profile with adaptive font size"""
+        display_name = self.format_display_name(
+            self.user_data.get('first_name', ''),
+            self.user_data.get('middle_name', ''),
+            self.user_data.get('last_name', '')
+        )
+        
+        # Calculate adaptive font size based on name length
+        font_size = self.calculate_font_size(display_name)
+        
+        # Update the canvas text with new font size while keeping it centered
+        self.canvas.itemconfig(self.name_display_id, text=display_name, font=("Inter", font_size * -1))
 
     def refresh_data(self):
         """Refresh data from database"""

@@ -57,7 +57,7 @@ class DatabaseInitializer:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS students (
                     id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT UNIQUE NOT NULL,
+                    user_id INT UNIQUE,
                     student_number VARCHAR(20) UNIQUE NOT NULL,
                     first_name VARCHAR(50) NOT NULL,
                     last_name VARCHAR(50) NOT NULL,
@@ -70,7 +70,6 @@ class DatabaseInitializer:
                     address TEXT,
                     enrollment_status ENUM('Enrolled', 'Inactive', 'Graduated', 'Transferred') DEFAULT 'Enrolled',
                     date_enrolled DATE,
-                    expected_graduation DATE,
                     has_obligations BOOLEAN DEFAULT FALSE,
                     obligations_details TEXT,
                     profile_picture longblob,
@@ -315,6 +314,23 @@ class DatabaseInitializer:
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, [(code, name, desc, fee, days, clearance, admin_user_id) for code, name, desc, fee, days, clearance in document_types])
             
+            # Insert sample student records
+            student_records = [
+                (None, 'PDM-2025-000001', 'Juan', 'Dela Cruz', 'S.', '2003-02-15', 'Male', 'BS Information Technology', '1st Year', '09123456701', 'Marilao, Bulacan', 'Enrolled', '2025-06-01', False, None),
+                (None, 'PDM-2025-000002', 'Maria', 'Santos', 'L.', '2003-05-20', 'Female', 'BS Computer Science', '1st Year', '09123456702', 'Malolos, Bulacan', 'Enrolled', '2025-06-01', False, None),
+                (None, 'PDM-2025-000003', 'Jose', 'Reyes', 'M.', '2003-08-10', 'Male', 'BS Information Systems', '1st Year', '09123456703', 'Plaridel, Bulacan', 'Enrolled', '2025-06-01', False, None),
+                (None, 'PDM-2025-000004', 'Ana', 'Lopez', 'R.', '2003-03-05', 'Female', 'BS Information Technology', '1st Year', '09123456704', 'Hagonoy, Bulacan', 'Enrolled', '2025-06-01', False, None),
+                (None, 'PDM-2025-000005', 'Mark', 'Gonzales', 'T.', '2003-11-12', 'Male', 'BS Computer Science', '1st Year', '09123456705', 'Balagtas, Bulacan', 'Enrolled', '2025-06-01', False, None)
+            ]
+            
+            cursor.executemany("""
+                INSERT IGNORE INTO students (
+                    user_id, student_number, first_name, last_name, middle_name,
+                    birth_date, gender, course, year_level, contact_number, address,
+                    enrollment_status, date_enrolled, has_obligations, obligations_details
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, student_records)
+            
             # Insert system settings by category
             settings = [
                 ('general', 'system_name', 'Pambayang Dalubhasaan ng Marilao - Document Request System', 'string', 'System display name', True),
@@ -343,11 +359,18 @@ class DatabaseInitializer:
             self.connection.commit()
             print("✓ Initial data inserted successfully with normalized structure")
             
-            # Display created accounts
+            # Display created accounts and students
             print("\n📋 Default Accounts Created:")
             print("👤 Admin Account: admin / admin123")
             print("👤 Registrar Account: registrar / registrar123")
             print("🏢 Department: Registrar Office")
+            
+            print("\n🎓 Sample Students Created:")
+            print("• Juan Dela Cruz (PDM-2025-000001) - BS Information Technology")
+            print("• Maria Santos (PDM-2025-000002) - BS Computer Science") 
+            print("• Jose Reyes (PDM-2025-000003) - BS Information Systems")
+            print("• Ana Lopez (PDM-2025-000004) - BS Information Technology")
+            print("• Mark Gonzales (PDM-2025-000005) - BS Computer Science")
             
             return True
         except Error as e:
@@ -401,5 +424,6 @@ if __name__ == "__main__":
         print("\nDefault accounts created:")
         print("👤 Admin: admin / admin123")
         print("👤 Registrar: registrar / registrar123")
+        print("\nSample students created (5 records)")
     else:
         print("❌ Database setup failed!")
