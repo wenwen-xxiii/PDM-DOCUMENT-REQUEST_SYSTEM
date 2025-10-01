@@ -264,7 +264,12 @@ class ProfileWindow:
         def upload_new_profile_pic():
             file_path = filedialog.askopenfilename(
                 title="Select Profile Picture",
-                filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp")]
+                filetypes=[
+                    ("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.tiff;*.tif"),
+                    ("JPEG Files", "*.jpg;*.jpeg"),
+                    ("PNG Files", "*.png"),
+                    ("All Files", "*.*")
+                ]
             )
             if file_path:
                 try:
