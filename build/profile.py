@@ -4,6 +4,9 @@ from tkinter import ttk, filedialog, Frame, Label
 from PIL import Image, ImageTk
 import datetime
 import os, sys
+import mysql.connector
+from mysql.connector import Error
+import io
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -27,6 +30,7 @@ class ProfileWindow:
         self.get_db_connection = get_db_connection
         self.navigation_callbacks = navigation_callbacks or {}
         self.is_edit_mode = False
+        self.profile_image_data = None
         
         # Create main frame for profile content only (starts below navigation)
         self.main_frame = Frame(self.parent, bg="#FCECB7")
@@ -99,15 +103,8 @@ class ProfileWindow:
             top = (h - min_side) // 2
             return img.crop((left, top, left + min_side, top + min_side))
 
-        # Load default profile picture
-        try:
-            img = Image.open(relative_to_assets("image_profilepic.png"))
-            img = img.resize((140, 140), Image.LANCZOS)
-            self.profile_pic = ImageTk.PhotoImage(img)
-        except:
-            # Create a default blank image
-            img = Image.new('RGB', (140, 140), color='#FFF1C2')
-            self.profile_pic = ImageTk.PhotoImage(img)
+        # Load default profile picture initially
+        self.load_profile_picture()
 
         # Border (adjusted y from 263 to 123)
         border_size = 2
@@ -120,10 +117,18 @@ class ProfileWindow:
         )
         self.image_profilepic_id = self.canvas.create_image(x, y, image=self.profile_pic)
 
-        # Student Name (adjusted y from 355 to 215)
+        # Student Name display (adjusted y from 355 to 215)
         student_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
-        self.canvas.create_text(144.0, 215.0, anchor="nw", text=student_name, 
-                               fill="#000000", font=("Inter", 24 * -1))
+        self.name_display_id = self.canvas.create_text(144.0, 215.0, anchor="nw", text=student_name, 
+                               fill="#000000", font=("Inter", 24 * -1), tags="student_name")
+
+        # Name entry field background (always visible but entry field will be shown only during edit)
+        try:
+            entry_img_name = PhotoImage(file=relative_to_assets("entry_fullname.png"))
+            self.entry_img_name = entry_img_name
+            self.name_entry_bg = self.canvas.create_image(230.0, 220.0, image=entry_img_name, state="hidden")
+        except:
+            pass
 
         # Upload New Profile Button (adjusted y from 194 to 54)
         def upload_new_profile_pic():
@@ -138,6 +143,17 @@ class ProfileWindow:
                     new_img = ImageTk.PhotoImage(img)
                     self.profile_pic = new_img
                     self.canvas.itemconfig(self.image_profilepic_id, image=new_img)
+                    
+                    # Store image data for database
+                    with open(file_path, 'rb') as file:
+                        self.profile_image_data = file.read()
+                    
+                    # Automatically save the profile picture to database
+                    if self.save_profile_picture_to_db():
+                        messagebox.showinfo("Success", "Profile picture updated successfully!")
+                    else:
+                        messagebox.showerror("Error", "Failed to save profile picture to database.")
+                        
                 except Exception as e:
                     messagebox.showerror("Error", f"Unable to load image: {e}")
 
@@ -155,6 +171,73 @@ class ProfileWindow:
             self.button_newprofilepic.place(x=273.0, y=54.0, width=26.0, height=26.0)
         except Exception as e:
             print(f"Could not load new profile pic button: {e}")
+
+    def save_profile_picture_to_db(self):
+        """Save profile picture to database immediately after upload"""
+        try:
+            if not self.get_db_connection:
+                return False
+
+            connection = self.get_db_connection()
+            cursor = connection.cursor()
+
+            cursor.execute("""
+                UPDATE students 
+                SET profile_picture = %s
+                WHERE student_number = %s
+            """, (
+                self.profile_image_data,
+                self.user_data['student_number']
+            ))
+
+            connection.commit()
+            cursor.close()
+            connection.close()
+            return True
+
+        except Error as e:
+            print(f"Error saving profile picture to database: {e}")
+            return False
+
+    def load_profile_picture(self):
+        """Load profile picture from database or use default"""
+        # Try to load from database first
+        if self.get_db_connection and self.user_data.get('student_number'):
+            try:
+                connection = self.get_db_connection()
+                cursor = connection.cursor()
+                
+                cursor.execute("""
+                    SELECT profile_picture FROM students WHERE student_number = %s
+                """, (self.user_data['student_number'],))
+                
+                result = cursor.fetchone()
+                if result and result[0]:
+                    # Convert BLOB data to image
+                    image_data = result[0]
+                    image = Image.open(io.BytesIO(image_data))
+                    image = image.resize((140, 140), Image.LANCZOS)
+                    self.profile_pic = ImageTk.PhotoImage(image)
+                    # Store the image data for future use
+                    self.profile_image_data = image_data
+                    cursor.close()
+                    connection.close()
+                    return
+                
+                cursor.close()
+                connection.close()
+            except Error as e:
+                print(f"Error loading profile picture from database: {e}")
+        
+        # Load default profile picture if no image in database or error
+        try:
+            img = Image.open(relative_to_assets("image_profilepic.png"))
+            img = img.resize((140, 140), Image.LANCZOS)
+            self.profile_pic = ImageTk.PhotoImage(img)
+        except:
+            # Create a default blank image
+            img = Image.new('RGB', (140, 140), color='#FFF1C2')
+            self.profile_pic = ImageTk.PhotoImage(img)
 
     def setup_input_fields(self):
         """Setup all input fields with adjusted positions"""
@@ -231,7 +314,7 @@ class ProfileWindow:
 
         self.dob_day = ttk.Combobox(self.main_frame, values=[str(i) for i in range(1, 32)],
                                 state="readonly", style="Custom.TCombobox", width=6)
-        self.dob_day.place(x=795.0, y=110.0, width=75.0, height=38.0)
+        self.dob_day.place(x=805.0, y=110.0, width=65.0, height=38.0)
 
         try:
             entry_img_dob_year = PhotoImage(file=relative_to_assets("entry_bdayyear.png"))
@@ -243,7 +326,7 @@ class ProfileWindow:
         current_year = datetime.datetime.now().year
         self.dob_year = ttk.Combobox(self.main_frame, values=[str(y) for y in range(current_year - 40, current_year + 1)],
                                     state="readonly", style="Custom.TCombobox", width=8)
-        self.dob_year.place(x=910.0, y=110.0, width=54.0, height=38.0)
+        self.dob_year.place(x=900.0, y=110.0, width=64.0, height=38.0)
 
         # Gender (adjusted y from 219 to 79)
         self.canvas.create_text(998.0, 79.0, anchor="nw", text="Gender", 
@@ -334,6 +417,8 @@ class ProfileWindow:
                                     relief="flat", bg="#FFF1C2", font=("Inter", 10),
                                     wrap="word")
         self.entry_obligations.place(x=445.0, y=424.0, width=746.0, height=153.0)
+        # Set obligations to permanently readonly
+        self.entry_obligations.config(state="disabled")
 
     def setup_buttons(self):
         """Setup edit/save button (adjusted y from 667 to 527)"""
@@ -392,8 +477,35 @@ class ProfileWindow:
     def set_fields_editable(self, editable):
         """Set all fields to editable or readonly"""
         state = "normal" if editable else "readonly"
-        text_state = "normal" if editable else "disabled"
         combo_state = "readonly" if editable else "disabled"
+        
+        # Show/hide name field based on edit mode
+        if editable:
+            # Hide the name display text and show the entry field
+            self.canvas.itemconfig(self.name_display_id, state="hidden")
+            self.canvas.itemconfig(self.name_entry_bg, state="normal")
+            
+            # Create the entry field only when needed (during edit mode)
+            if not hasattr(self, 'entry_fullname') or self.entry_fullname is None:
+                self.entry_fullname = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
+                                          relief="flat", bg="#FFF1C2", font=("Inter", 14),
+                                          justify="center")
+                # Populate with current name
+                full_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
+                self.entry_fullname.delete(0, 'end')
+                self.entry_fullname.insert(0, full_name)
+            
+            self.entry_fullname.place(x=120.0, y=202.0, width=220.0, height=38.0)
+        else:
+            # Hide the entry field and show the name display text
+            if hasattr(self, 'entry_fullname') and self.entry_fullname:
+                self.entry_fullname.place_forget()
+                # Destroy the entry widget to completely remove it
+                self.entry_fullname.destroy()
+                self.entry_fullname = None
+            
+            self.canvas.itemconfig(self.name_display_id, state="normal")
+            self.canvas.itemconfig(self.name_entry_bg, state="hidden")
         
         # Entry fields
         for entry in [self.entry_studentno, self.entry_email, self.entry_contact, self.entry_address]:
@@ -402,8 +514,8 @@ class ProfileWindow:
             else:
                 entry.config(state="readonly", readonlybackground="#FFF1C2")
         
-        # Text field
-        self.entry_obligations.config(state=text_state)
+        # Obligations field remains permanently disabled (readonly)
+        # No need to change its state
         
         # Combobox fields
         for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 
@@ -411,7 +523,45 @@ class ProfileWindow:
             combo.config(state=combo_state)
 
     def load_user_data(self):
-        """Load user data into the form fields"""
+        """Load user data from database into the form fields"""
+        if not self.get_db_connection:
+            self.load_default_data()
+            return
+
+        try:
+            connection = self.get_db_connection()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get student data with user email
+            cursor.execute("""
+                SELECT s.*, u.email 
+                FROM students s 
+                JOIN users u ON s.user_id = u.id 
+                WHERE s.student_number = %s
+            """, (self.user_data.get('student_number'),))
+            
+            student_data = cursor.fetchone()
+            
+            if student_data:
+                self.user_data.update(student_data)
+                self.populate_form_fields()
+            else:
+                messagebox.showwarning("Warning", "Student data not found in database.")
+                self.load_default_data()
+            
+            cursor.close()
+            connection.close()
+            
+        except Error as e:
+            messagebox.showerror("Database Error", f"Failed to load user data: {e}")
+            self.load_default_data()
+
+    def load_default_data(self):
+        """Load default data when database is not available"""
+        self.populate_form_fields()
+
+    def populate_form_fields(self):
+        """Populate form fields with user data"""
         # Clear any existing data first
         self.clear_fields()
         
@@ -445,81 +595,182 @@ class ProfileWindow:
         self.year_level.set(self.user_data.get('year_level', ''))
         self.enrollment_status.set(self.user_data.get('enrollment_status', ''))
         
-        # Obligations
+        # Obligations - always readonly
         obligations_text = "No outstanding obligations."
         if self.user_data.get('has_obligations'):
             obligations_text = self.user_data.get('obligations_details', 'Has obligations. Please contact registrar.')
-        self.entry_obligations.insert("1.0", obligations_text)
         
-        # Set all fields to readonly initially
+        # Temporarily enable to insert text, then disable again
+        self.entry_obligations.config(state="normal")
+        self.entry_obligations.delete('1.0', 'end')
+        self.entry_obligations.insert("1.0", obligations_text)
+        self.entry_obligations.config(state="disabled")
+        
+        # Update name display
+        self.update_name_display()
+        
+        # Set all fields to readonly initially (except obligations which is permanently readonly)
         self.set_fields_editable(False)
 
     def save_data(self):
-        """Save the form data"""
+        """Save the form data to database"""
         try:
-            # Here you would save to database
-            # For now, just update the user_data dictionary
+            if not self.get_db_connection:
+                return self.save_to_memory()
+
+            connection = self.get_db_connection()
+            cursor = connection.cursor()
+
+            # Parse full name from the entry field
+            full_name = self.entry_fullname.get().strip()
+            name_parts = full_name.split(' ', 1)  # Split into first name and rest
+            if len(name_parts) == 2:
+                first_name, last_name = name_parts
+            else:
+                first_name = full_name
+                last_name = ""
+
+            # Parse date of birth
+            birth_date = None
+            if self.dob_month.get() and self.dob_day.get() and self.dob_year.get():
+                try:
+                    month_num = datetime.datetime.strptime(self.dob_month.get(), '%B').month
+                    birth_date = f"{self.dob_year.get()}-{month_num:02d}-{int(self.dob_day.get()):02d}"
+                except ValueError:
+                    messagebox.showwarning("Warning", "Invalid date of birth")
+
+            # Update student record (excluding profile_picture since it's saved separately)
+            cursor.execute("""
+                UPDATE students 
+                SET first_name = %s,
+                    last_name = %s,
+                    contact_number = %s,
+                    address = %s,
+                    birth_date = %s,
+                    gender = %s,
+                    course = %s,
+                    year_level = %s,
+                    enrollment_status = %s
+                WHERE student_number = %s
+            """, (
+                first_name,
+                last_name,
+                self.entry_contact.get(),
+                self.entry_address.get(),
+                birth_date,
+                self.gender.get(),
+                self.course.get(),
+                self.year_level.get(),
+                self.enrollment_status.get(),
+                self.user_data['student_number']
+            ))
+
+            # Update user email if changed
+            if self.entry_email.get() != self.user_data.get('email'):
+                cursor.execute("""
+                    UPDATE users 
+                    SET email = %s 
+                    WHERE id = (SELECT user_id FROM students WHERE student_number = %s)
+                """, (self.entry_email.get(), self.user_data['student_number']))
+
+            connection.commit()
+            cursor.close()
+            connection.close()
+
+            # Update local user data
             self.user_data.update({
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': self.entry_email.get(),
+                'contact_number': self.entry_contact.get(),
+                'address': self.entry_address.get(),
+                'birth_date': birth_date,
+                'gender': self.gender.get(),
+                'course': self.course.get(),
+                'year_level': self.year_level.get(),
+                'enrollment_status': self.enrollment_status.get()
+            })
+
+            self.update_name_display()
+            return True
+
+        except Error as e:
+            messagebox.showerror("Database Error", f"Failed to save data: {e}")
+            return False
+
+    def save_to_memory(self):
+        """Save data to memory when database is not available"""
+        try:
+            # Parse full name from the entry field
+            full_name = self.entry_fullname.get().strip()
+            name_parts = full_name.split(' ', 1)
+            if len(name_parts) == 2:
+                first_name, last_name = name_parts
+            else:
+                first_name = full_name
+                last_name = ""
+
+            # Parse date of birth
+            birth_date = None
+            if self.dob_month.get() and self.dob_day.get() and self.dob_year.get():
+                try:
+                    month_num = datetime.datetime.strptime(self.dob_month.get(), '%B').month
+                    birth_date = f"{self.dob_year.get()}-{month_num:02d}-{int(self.dob_day.get()):02d}"
+                except ValueError:
+                    pass
+
+            # Update user data
+            self.user_data.update({
+                'first_name': first_name,
+                'last_name': last_name,
                 'student_number': self.entry_studentno.get(),
                 'email': self.entry_email.get(),
                 'contact_number': self.entry_contact.get(),
                 'address': self.entry_address.get(),
+                'birth_date': birth_date,
                 'gender': self.gender.get(),
                 'course': self.course.get(),
                 'year_level': self.year_level.get(),
-                'enrollment_status': self.enrollment_status.get(),
-                'obligations_details': self.entry_obligations.get("1.0", "end-1c")
+                'enrollment_status': self.enrollment_status.get()
             })
-            
-            # Update name display
-            self.canvas.delete("student_name")
-            student_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
-            self.canvas.create_text(144.0, 215.0, anchor="nw", text=student_name, 
-                                   fill="#000000", font=("Inter", 24 * -1), tags="student_name")
-            
+
+            self.update_name_display()
             return True
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save data: {e}")
             return False
 
+    def update_name_display(self):
+        """Update the name display on the profile"""
+        student_name = f"{self.user_data.get('first_name', '')} {self.user_data.get('last_name', '')}"
+        self.canvas.itemconfig(self.name_display_id, text=student_name)
+
     def refresh_data(self):
         """Refresh data from database"""
-        if self.get_db_connection:
-            try:
-                connection = self.get_db_connection()
-                cursor = connection.cursor(dictionary=True)
-                
-                if self.user_type == 'student':
-                    cursor.execute("""
-                        SELECT s.*, u.email 
-                        FROM students s 
-                        JOIN users u ON s.user_id = u.id 
-                        WHERE s.student_number = %s
-                    """, (self.user_data['student_number'],))
-                    user_data = cursor.fetchone()
-                    
-                    if user_data:
-                        self.user_data.update(user_data)
-                        # Clear all fields and reload
-                        self.clear_fields()
-                        self.load_user_data()
-                
-                cursor.close()
-                connection.close()
-                
-            except Exception as e:
-                print(f"Error refreshing data: {e}")
+        # Reload profile picture from database
+        self.load_profile_picture()
+        self.canvas.itemconfig(self.image_profilepic_id, image=self.profile_pic)
+        
+        # Reload other data
+        self.load_user_data()
 
     def clear_fields(self):
         """Clear all form fields"""
         for entry in [self.entry_studentno, self.entry_email, self.entry_contact, self.entry_address]:
             entry.delete(0, 'end')
         
+        # Only clear the name entry if it exists
+        if hasattr(self, 'entry_fullname') and self.entry_fullname:
+            self.entry_fullname.delete(0, 'end')
+        
         for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 
                      self.course, self.year_level, self.enrollment_status]:
             combo.set('')
         
+        # Clear obligations (temporarily enable to clear, then disable)
+        self.entry_obligations.config(state="normal")
         self.entry_obligations.delete('1.0', 'end')
+        self.entry_obligations.config(state="disabled")
 
     def destroy(self):
         """Clean up when window is closed"""
