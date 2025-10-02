@@ -16,10 +16,18 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_CONFIG
 
 OUTPUT_PATH = Path(__file__).parent
-ASSETS_PATH = OUTPUT_PATH / Path(r"E:\output tk\5\build\assets\frame1")
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
 
 def relative_to_assets(path: str) -> Path:
-    return ASSETS_PATH / Path(path)
+    return Path(resource_path(f"resources/assets/requestform/{path}"))
 
 class DocumentRequestWindow:
     def __init__(self, parent, student_id, show_dashboard_callback):
