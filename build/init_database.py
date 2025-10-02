@@ -120,13 +120,11 @@ class DatabaseInitializer:
                     request_number VARCHAR(20) UNIQUE NOT NULL,
                     student_id INT NOT NULL,
                     document_type_id INT NOT NULL,
-                    purpose ENUM('Employment', 'Further Studies', 'Scholarship', 'Personal Use', 'Transfer', 'Other') NOT NULL,
                     purpose_details TEXT,
                     quantity INT DEFAULT 1,
-                    special_instructions TEXT,
+                    delivery_mode ENUM('pickup', 'online') DEFAULT 'pickup',
                     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    preferred_pickup_date DATE,
-                    actual_pickup_date DATE,
+                    request_release_date DATE,
                     status ENUM('draft', 'submitted', 'under_review', 'payment_pending', 'processing', 'ready_for_pickup', 'completed', 'cancelled', 'rejected') DEFAULT 'draft',
                     rejection_reason TEXT,
                     total_amount DECIMAL(10,2) DEFAULT 0.00,
@@ -255,6 +253,23 @@ class DatabaseInitializer:
                 )
             """)
             
+            # Request Sequences table for generating request numbers
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS request_sequences (
+                    sequence_date DATE PRIMARY KEY,
+                    last_number INT DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create indexes for better performance
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_student ON document_requests(student_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_status ON document_requests(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_date ON document_requests(request_date)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_number ON students(student_number)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_types_available ON document_types(is_available)")
+            
             print("✓ All tables created successfully with normalized structure")
             return True
         except Error as e:
@@ -271,7 +286,7 @@ class DatabaseInitializer:
             cursor.execute("""
                 INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
                 VALUES (%s, %s, %s, %s, %s)
-            """, ('admin', 'admin', admin_password, 'admin', True))
+            """, ('admin', 'admin@pdm.edu.ph', admin_password, 'admin', True))
             admin_user_id = cursor.lastrowid if cursor.lastrowid else 1
             
             # Create default registrar user account
@@ -279,8 +294,16 @@ class DatabaseInitializer:
             cursor.execute("""
                 INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
                 VALUES (%s, %s, %s, %s, %s)
-            """, ('registrar', 'registrar', registrar_password, 'registrar', True))
+            """, ('registrar', 'registrar@pdm.edu.ph', registrar_password, 'registrar', True))
             registrar_user_id = cursor.lastrowid if cursor.lastrowid else 2
+            
+            # Create student user account
+            student_password = hashlib.sha256('admin123'.encode()).hexdigest()
+            cursor.execute("""
+                INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, ('PDM-2023-003139', 'wenwenxiii@gmail.com', student_password, 'student', True))
+            student_user_id = cursor.lastrowid if cursor.lastrowid else 3
             
             # Create admin staff record
             cursor.execute("""
@@ -296,26 +319,28 @@ class DatabaseInitializer:
             
             # Insert document types with codes
             document_types = [
-                ('COE', 'Certificate of Enrollment', 'Current enrollment or registration certification', 100.00, 2, True),
+                ('COE', 'Certificate of Enrollment', 'Current enrollment or registration certification', 100.00, 2, False),
                 ('CG', 'Certificate of Grades', 'Current semester grades', 120.00, 2, False),
                 ('DIPLOMA', 'Diploma (True Copy)', 'Graduation diploma', 500.00, 10, True),
                 ('TOR', 'Transcript of Records (TOR)', 'Official academic transcript', 250.00, 5, True),
-                ('CGrad', 'Certificate of Graduation/Completion', 'Proof of graduation or course completion', 200.00, 3, True),
+                ('CGrad', 'Certificate of Graduation', 'Proof of graduation or course completion', 200.00, 3, True),
                 ('GMC', 'Certificate of Good Moral Character', 'Certificate of good moral character', 150.00, 3, True),
-                ('HD', 'Honorable Dismissal/Transfer Credentials', 'Transfer or honorable dismissal document', 300.00, 7, True),
+                ('TC', 'Transfer Credentials', 'Transfer or honorable dismissal document', 300.00, 7, True),
                 ('RL', 'Recommendation Letter', 'Recommendation from faculty or school', 100.00, 2, False),
                 ('CUE', 'Certificate of Units Earned', 'Document showing units earned', 150.00, 3, True),
                 ('CL', 'Clearance', 'School clearance document', 50.00, 1, True)
             ]
 
-            
             cursor.executemany("""
                 INSERT IGNORE INTO document_types (code, name, description, fee_amount, processing_days, requires_clearance, created_by) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, [(code, name, desc, fee, days, clearance, admin_user_id) for code, name, desc, fee, days, clearance in document_types])
             
-            # Insert sample student records
+            # Insert sample student records - FIXED: Correct number of parameters
             student_records = [
+                # Wendell Rebusit (with user_id 3)
+                (3, 'PDM-2023-003139', 'Wendell', 'Rebusit', 'Fernandez', '1998-09-23', 'Male', 'BS Information Technology', '3rd Year', '09270786707', 'Iloilo City', 'Enrolled', '2023-06-01', False, None),
+                # Other sample students (without user_id)
                 (None, 'PDM-2025-000001', 'Juan', 'Dela Cruz', 'S.', '2003-02-15', 'Male', 'BS Information Technology', '1st Year', '09123456701', 'Marilao, Bulacan', 'Enrolled', '2025-06-01', False, None),
                 (None, 'PDM-2025-000002', 'Maria', 'Santos', 'L.', '2003-05-20', 'Female', 'BS Computer Science', '1st Year', '09123456702', 'Malolos, Bulacan', 'Enrolled', '2025-06-01', False, None),
                 (None, 'PDM-2025-000003', 'Jose', 'Reyes', 'M.', '2003-08-10', 'Male', 'BS Information Systems', '1st Year', '09123456703', 'Plaridel, Bulacan', 'Enrolled', '2025-06-01', False, None),
@@ -335,7 +360,7 @@ class DatabaseInitializer:
             settings = [
                 ('general', 'system_name', 'Pambayang Dalubhasaan ng Marilao - Document Request System', 'string', 'System display name', True),
                 ('general', 'institution_name', 'Pambayang Dalubhasaan ng Marilao', 'string', 'Institution full name', True),
-                ('general', 'contact_email', 'registrar', 'string', 'Contact email for support', True),
+                ('general', 'contact_email', 'registrar@pdm.edu.ph', 'string', 'Contact email for support', True),
                 ('general', 'contact_phone', '(02) 1234-5678', 'string', 'Contact phone number', True),
                 
                 ('payments', 'online_payment_enabled', 'true', 'boolean', 'Enable online payments', True),
@@ -363,14 +388,16 @@ class DatabaseInitializer:
             print("\n📋 Default Accounts Created:")
             print("👤 Admin Account: admin / admin123")
             print("👤 Registrar Account: registrar / registrar123")
+            print("👤 Student Account: PDM-2023-003139 / admin123")
             print("🏢 Department: Registrar Office")
             
             print("\n🎓 Sample Students Created:")
-            print("• Juan Dela Cruz (PDM-2025-000001) - BS Information Technology")
-            print("• Maria Santos (PDM-2025-000002) - BS Computer Science") 
-            print("• Jose Reyes (PDM-2025-000003) - BS Information Systems")
-            print("• Ana Lopez (PDM-2025-000004) - BS Information Technology")
-            print("• Mark Gonzales (PDM-2025-000005) - BS Computer Science")
+            print("• Wendell Rebusit (PDM-2023-003139) - BS Information Technology - 3rd Year")
+            print("• Juan Dela Cruz (PDM-2025-000001) - BS Information Technology - 1st Year")
+            print("• Maria Santos (PDM-2025-000002) - BS Computer Science - 1st Year") 
+            print("• Jose Reyes (PDM-2025-000003) - BS Information Systems - 1st Year")
+            print("• Ana Lopez (PDM-2025-000004) - BS Information Technology - 1st Year")
+            print("• Mark Gonzales (PDM-2025-000005) - BS Computer Science - 1st Year")
             
             return True
         except Error as e:
@@ -424,6 +451,7 @@ if __name__ == "__main__":
         print("\nDefault accounts created:")
         print("👤 Admin: admin / admin123")
         print("👤 Registrar: registrar / registrar123")
-        print("\nSample students created (5 records)")
+        print("👤 Student: PDM-2023-003139 / admin123")
+        print("\nSample students created (6 records)")
     else:
         print("❌ Database setup failed!")
