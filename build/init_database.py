@@ -125,7 +125,7 @@ class DatabaseInitializer:
                     delivery_mode ENUM('pickup', 'online') DEFAULT 'pickup',
                     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     request_release_date DATE,
-                    status ENUM('draft', 'submitted', 'under_review', 'payment_pending', 'processing', 'ready_for_pickup', 'completed', 'cancelled', 'rejected') DEFAULT 'draft',
+                    status ENUM('under_review', 'payment_pending', 'processing', 'ready_for_pickup', 'completed', 'cancelled', 'rejected') DEFAULT 'draft',
                     rejection_reason TEXT,
                     total_amount DECIMAL(10,2) DEFAULT 0.00,
                     payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',

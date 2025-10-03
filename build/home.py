@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from tkinter import messagebox
 from profile import ProfileWindow
+from document import DocumentWindow
 import mysql.connector
 
 OUTPUT_PATH = Path(__file__).parent
@@ -261,24 +262,26 @@ class HomeWindow:
         programs_label.pack(expand=True)
 
     def show_document_request(self):
-        """Show document request interface"""
-        self.current_content = "document_request"
+        """Show document request to user using separate window"""
+        self.current_content = "document"
         self.clear_content()
         
-        content_frame = Frame(self.parent, bg="#FCECB7")
-        content_frame.place(relx=0.5, rely=0.6, anchor="center", 
-                          width=min(1000, self.parent.winfo_width() * 0.9), 
-                          height=min(500, self.parent.winfo_height() * 0.7))
+        navigation_callbacks = {
+            'home': self.show_home,
+            'programs': self.show_programs,
+            'documents': self.show_document_request,
+            'logout': self.logout
+        }
         
-        doc_label = Label(
-            content_frame,
-            text="Document Request Interface\n\nThis area will contain the document request form,\ndocument selection, and request history.",
-            font=("Inter Bold", 18),
-            bg="#FCECB7",
-            fg="#792D1B",
-            justify="center"
+        # FIX: Pass self.parent (the main window) instead of self.show_home (function)
+        self.document_window = DocumentWindow(
+            parent=self.parent,  # Changed from self.show_home to self.parent
+            user_data=self.user_data,
+            user_type=self.user_type,
+            get_db_connection=self.get_db_connection,
+            navigation_callbacks=navigation_callbacks
         )
-        doc_label.pack(expand=True)
+        
 
     def show_profile(self):
         """Show user profile using the separate ProfileWindow"""

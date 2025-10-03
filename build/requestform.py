@@ -2,7 +2,7 @@
 # https://github.com/ParthJadhav/Tkinter-Designer
 
 from pathlib import Path
-from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, messagebox, StringVar
+from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, messagebox, StringVar, Toplevel
 from tkinter import ttk
 import mysql.connector
 from datetime import datetime, timedelta
@@ -38,15 +38,34 @@ class DocumentRequestWindow:
         self.selected_document_type = None
         self.delivery_mode = "pickup"  # Default delivery mode
         
+        # Store all image references to prevent garbage collection
+        self.images = []
+        
         self.setup_ui()
         self.load_document_types()
         self.setup_bindings()
         
+    def center_window(self):
+        """Center the window on the screen"""
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+        
     def setup_ui(self):
-        self.window = Tk()
+        # Use Toplevel instead of Tk for child windows
+        self.window = Toplevel(self.parent)
         self.window.geometry("508x623")
         self.window.configure(bg="#FCECB7")
         self.window.title("Document Request - PDM")
+        self.window.resizable(False, False)
+        
+        # Center the window on screen
+        self.center_window()  # ADD THIS LINE
+        self.window.transient(self.parent)  # Set as transient to main window
+        self.window.grab_set()  # Make it modal
 
         self.canvas = Canvas(
             self.window,
@@ -64,8 +83,8 @@ class DocumentRequestWindow:
         
     def create_ui_elements(self):
         # Header
-        self.canvas.create_rectangle(0.0, 0.0, 1270.0, 98.0, fill="#792D1B", outline="")
-        self.canvas.create_rectangle(0.0, 57.0, 1270.0, 99.0, fill="#FFDA0C", outline="")
+        self.canvas.create_rectangle(0.0, 0.0, 508.0, 57.0, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(0.0, 57.0, 508.0, 99.0, fill="#FFDA0C", outline="")
         
         # Form container
         self.canvas.create_rectangle(19.0, 122.0, 483.0, 604.0, fill="#FFFFFF", outline="")
@@ -81,6 +100,7 @@ class DocumentRequestWindow:
 
         # Document Type Dropdown - Borderless with custom styling
         self.entry_image_5 = PhotoImage(file=relative_to_assets("entry_docType.png"))
+        self.images.append(self.entry_image_5)  # Store reference
         self.canvas.create_image(255.5, 182.5, image=self.entry_image_5)
         
         self.doc_type_var = StringVar()
@@ -112,6 +132,7 @@ class DocumentRequestWindow:
         
         # Delivery Type Dropdown - Borderless with custom styling
         self.entry_image_6 = PhotoImage(file=relative_to_assets("entry_deliveryType.png"))
+        self.images.append(self.entry_image_6)  # Store reference
         self.canvas.create_image(256.0, 434.0, image=self.entry_image_6)
         
         self.delivery_var = StringVar()
@@ -128,6 +149,7 @@ class DocumentRequestWindow:
 
         # Quantity Entry with increment/decrement buttons
         self.entry_image_3 = PhotoImage(file=relative_to_assets("entry_quantity.png"))
+        self.images.append(self.entry_image_3)  # Store reference
         self.canvas.create_image(143.5, 266.0, image=self.entry_image_3)
         
         self.quantity_var = StringVar(value="1")
@@ -146,7 +168,9 @@ class DocumentRequestWindow:
 
         # Quantity buttons
         self.button_image_1 = PhotoImage(file=relative_to_assets("button_numeridown_quantity.png"))
+        self.images.append(self.button_image_1)  # Store reference
         self.button_numeridown_quantity = Button(
+            self.window,
             image=self.button_image_1,
             borderwidth=0,
             highlightthickness=0,
@@ -156,7 +180,9 @@ class DocumentRequestWindow:
         self.button_numeridown_quantity.place(x=208.0, y=266.5, width=18.0, height=15.0)
 
         self.button_image_3 = PhotoImage(file=relative_to_assets("button_numericup_quantity.png"))
+        self.images.append(self.button_image_3)  # Store reference
         self.button_numericup_quantity = Button(
+            self.window,
             image=self.button_image_3,
             borderwidth=0,
             highlightthickness=0,
@@ -167,6 +193,7 @@ class DocumentRequestWindow:
 
         # Price per copy (readonly) - Centered text
         self.entry_image_1 = PhotoImage(file=relative_to_assets("entry_price_per_copy.png"))
+        self.images.append(self.entry_image_1)  # Store reference
         self.canvas.create_image(368.5, 267.0, image=self.entry_image_1)
         
         self.price_var = StringVar()
@@ -186,6 +213,7 @@ class DocumentRequestWindow:
 
         # Total to Pay (readonly) - Centered text
         self.entry_image_4 = PhotoImage(file=relative_to_assets("entry_total.png"))
+        self.images.append(self.entry_image_4)  # Store reference
         self.canvas.create_image(143.5, 350.0, image=self.entry_image_4)
         
         self.total_var = StringVar(value="₱0.00")
@@ -205,6 +233,7 @@ class DocumentRequestWindow:
 
         # Releasing Date - Centered text
         self.entry_image_2 = PhotoImage(file=relative_to_assets("entry_releasingDate.png"))
+        self.images.append(self.entry_image_2)  # Store reference
         self.canvas.create_image(368.5, 351.0, image=self.entry_image_2)
         
         # Calculate default releasing date (3 business days from now)
@@ -225,6 +254,7 @@ class DocumentRequestWindow:
 
         # Purpose Text area
         self.entry_image_7 = PhotoImage(file=relative_to_assets("entry_purpose.png"))
+        self.images.append(self.entry_image_7)  # Store reference
         self.canvas.create_image(256.0, 540.0, image=self.entry_image_7)
         
         self.text_purpose = Text(
@@ -240,7 +270,9 @@ class DocumentRequestWindow:
 
         # Buttons
         self.button_image_2 = PhotoImage(file=relative_to_assets("button_back.png"))
+        self.images.append(self.button_image_2)  # Store reference
         self.button_back = Button(
+            self.window,
             image=self.button_image_2,
             borderwidth=0,
             highlightthickness=0,
@@ -250,7 +282,9 @@ class DocumentRequestWindow:
         self.button_back.place(x=27.0, y=19.0, width=15.0, height=18.0)
 
         self.button_image_5 = PhotoImage(file=relative_to_assets("button_submit.png"))
+        self.images.append(self.button_image_5)  # Store reference
         self.button_submit = Button(
+            self.window,
             image=self.button_image_5,
             borderwidth=0,
             highlightthickness=0,
@@ -446,12 +480,14 @@ class DocumentRequestWindow:
     def go_back(self):
         """Return to dashboard"""
         self.window.destroy()
-        if hasattr(self, 'show_dashboard_callback'):
+        if hasattr(self, 'show_dashboard_callback') and self.show_dashboard_callback:
             self.show_dashboard_callback()
 
     def run(self):
         """Run the application"""
-        self.window.mainloop()
+        # No need for mainloop since it's a Toplevel window
+        # The window will be managed by the parent
+        pass
 
 # For testing purposes
 if __name__ == "__main__":
@@ -461,5 +497,7 @@ if __name__ == "__main__":
     def mock_dashboard_callback():
         print("Returning to dashboard...")
     
-    app = DocumentRequestWindow(None, student_id, mock_dashboard_callback)
-    app.run()
+    # Create a root window for testing
+    root = Tk()
+    app = DocumentRequestWindow(root, student_id, mock_dashboard_callback)
+    root.mainloop()
