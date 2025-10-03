@@ -34,3 +34,8 @@ APP_CONFIG = {
     'debug': os.getenv('APP_DEBUG', 'True').lower() == 'true',
     'secret_key': os.getenv('APP_SECRET_KEY', 'default-secret-key-change-in-production')
 }
+
+PAYMONGO_CONFIG = {
+    'secret_key': os.getenv('PAYMONGO_SECRET_KEY',''),
+    'public_key': os.getenv('PAYMONGO_PUBLIC_KEY', '')
+}            

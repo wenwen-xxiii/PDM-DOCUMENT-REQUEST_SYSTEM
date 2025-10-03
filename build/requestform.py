@@ -451,7 +451,7 @@ class DocumentRequestWindow:
                 self.delivery_mode,
                 self.releasing_date_var.get(),  # This matches request_release_date
                 float(self.selected_document_type['fee_amount']) * quantity,
-                'submitted',
+                'payment_pending',
                 'pending'
             ))
             

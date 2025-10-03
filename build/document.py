@@ -11,6 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import your existing modules
 from config import DB_CONFIG
 from requestform import DocumentRequestWindow
+from payment_window import PaymentWindow 
+
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -331,11 +333,12 @@ class DocumentWindow:
     def load_document_requests(self):
         """Load document requests from database"""
         try:
-            connection = mysql.connector.connect(**DB_CONFIG)
+            connection = self.get_db_connection()
             cursor = connection.cursor(dictionary=True)
             
             cursor.execute("""
                 SELECT 
+                    dr.id,
                     dr.request_number,
                     dt.name as document_name,
                     dr.request_release_date,
@@ -343,7 +346,8 @@ class DocumentWindow:
                     dr.total_amount,
                     dr.delivery_mode,
                     dr.status,
-                    dr.payment_status
+                    dr.payment_status,
+                    dr.payment_intent_id  -- ADD THIS FIELD
                 FROM document_requests dr
                 JOIN document_types dt ON dr.document_type_id = dt.id
                 WHERE dr.student_id = %s
@@ -355,10 +359,15 @@ class DocumentWindow:
             cursor.close()
             connection.close()
             
+            # Debug: Print loaded requests
+            print(f"Loaded {len(self.document_requests)} document requests:")
+            for req in self.document_requests:
+                print(f"  - {req['request_number']}: status={req['status']}, payment_status={req.get('payment_status')}, payment_intent_id={req.get('payment_intent_id')}")
+            
         except mysql.connector.Error as e:
             messagebox.showerror("Database Error", f"Failed to load document requests: {str(e)}")
             self.document_requests = []
-
+        
     def update_display(self):
         """Update the display with current page data"""
         # First, remove any existing "no records" text
@@ -484,10 +493,9 @@ class DocumentWindow:
                 # Format delivery type
                 delivery_type = "Online" if request['delivery_mode'] == 'online' else "Pickup"
                 
-                # Format status with payment info
-                status = request['status'].title()
-                if request['payment_status'] == 'pending' and request['status'] == 'submitted':
-                    status = "Payment Pending"
+                # Format status for display - FIXED THIS PART
+                status = request['status'].replace('_', ' ').title()
+                payment_status = request.get('payment_status', 'pending')
                 
                 # Update entries with actual data
                 row['requestno'].config(state="normal")
@@ -502,7 +510,10 @@ class DocumentWindow:
                 
                 row['release_date'].config(state="normal")
                 row['release_date'].delete(0, "end")
-                row['release_date'].insert(0, request['request_release_date'].strftime('%Y-%m-%d'))
+                if request['request_release_date']:
+                    row['release_date'].insert(0, request['request_release_date'].strftime('%Y-%m-%d'))
+                else:
+                    row['release_date'].insert(0, "TBD")
                 row['release_date'].config(state="readonly")
                 
                 row['docu_copy'].config(state="normal")
@@ -525,13 +536,16 @@ class DocumentWindow:
                 row['docu_status'].insert(0, status)
                 row['docu_status'].config(state="readonly")
                 
-                # Show appropriate button based on status
+                # Show appropriate button based on status - FIXED THIS PART
                 button_y_positions = [184.0, 276.0, 368.0, 460.0]
                 
-                if status.lower() == "payment pending":
+                # Show payment button when status is 'payment_pending' AND payment_status is 'pending'
+                if (request['status'] == 'payment_pending' and 
+                    payment_status == 'pending'):
                     # Show payment button
                     self.payment_buttons[i].place(x=1089.0, y=button_y_positions[i], width=96.0, height=40.0)
-                elif status.lower() == "completed":
+                    print(f"Showing payment button for request {request['request_number']}")  # Debug
+                elif request['status'] == 'completed':
                     # Show view document button
                     self.view_docu_buttons[i].place(x=1089.0, y=button_y_positions[i], width=96.0, height=40.0)
         
@@ -622,13 +636,29 @@ class DocumentWindow:
         
         if actual_index < len(self.document_requests):
             request = self.document_requests[actual_index]
-            messagebox.showinfo(
-                "Payment", 
-                f"Payment for:\n\n"
-                f"Request Number: {request['request_number']}\n"
-                f"Document: {request['document_name']}\n"
-                f"Amount: ₱{request['total_amount']:.2f}\n\n"
-                f"Payment gateway would open here."
+            
+            # Check if payment is already processing or completed
+            if request.get('payment_status') in ['paid']:
+                messagebox.showinfo(
+                    "Payment Status", 
+                    f"Payment for request {request['request_number']} is already paid."
+                )
+                return
+            
+            # Check if status allows payment
+            if request['status'] != 'payment_pending':
+                messagebox.showinfo(
+                    "Payment Status", 
+                    f"Request {request['request_number']} is not in payment pending status."
+                )
+                return
+            
+            # Don't import here - PaymentWindow is already in the same file
+            payment_window = PaymentWindow(
+                parent=self.parent,
+                request_data=request,
+                student_data=self.user_data,
+                refresh_callback=self.refresh_requests
             )
 
     def previous_page(self):
