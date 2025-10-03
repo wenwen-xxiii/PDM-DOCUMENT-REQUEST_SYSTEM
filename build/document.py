@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import your existing modules
 from config import DB_CONFIG
-from requestform import DocumentRequestWindow  # ADD THIS IMPORT
+from requestform import DocumentRequestWindow
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -49,6 +49,13 @@ class DocumentWindow:
         
         # Store all image references to prevent garbage collection
         self.images = []
+        
+        # Store card references to show/hide them
+        self.card_images = []
+        self.card_canvas_ids = []
+        
+        # Store entry background references
+        self.entry_bg_ids = []
         
         # Create main frame for document content only (starts below navigation)
         self.main_frame = Frame(self.parent, bg="#FCECB7")
@@ -92,8 +99,11 @@ class DocumentWindow:
         self.create_ui_elements()
         
     def create_ui_elements(self):
-        # Store all images to prevent garbage collection
+        # Store all image references to prevent garbage collection
         self.images = []
+        
+        # Store entry background image references
+        self.entry_bg_ids = []
         
         # Main content background
         self.canvas.create_rectangle(47.0, 24.0, 1222.0, 590.0, fill="#FEFEFE", outline="")  # Adjusted y-positions
@@ -101,7 +111,7 @@ class DocumentWindow:
         # Grid header
         header_img = PhotoImage(file=relative_to_assets("img_headergrid.png"))
         self.images.append(header_img)  # Store reference
-        self.canvas.create_image(635.0, 125.5, image=header_img)  # Adjusted y-position
+        self.header_bg_id = self.canvas.create_image(635.0, 125.5, image=header_img)  # Store ID for header
 
         # Header labels (adjusted y-positions)
         self.canvas.create_text(117.0, 117.0, anchor="nw", text="Request Number", fill="#FEFEFE", font=("Inter", 16 * -1))
@@ -115,7 +125,7 @@ class DocumentWindow:
         self.canvas.create_text(587.0, 106.0, anchor="nw", text="No. of", fill="#FEFEFE", font=("Inter", 16 * -1))
         self.canvas.create_text(591.0, 128.0, anchor="nw", text="Days", fill="#FEFEFE", font=("Inter", 16 * -1))
 
-        # Card backgrounds (adjusted y-positions)
+        # Card backgrounds (adjusted y-positions) - Create but don't show initially
         img_cards = []
         y_centers = [202.5, 295.5, 387.5, 479.5]  # Adjusted y-positions
 
@@ -123,7 +133,11 @@ class DocumentWindow:
             card_img = PhotoImage(file=relative_to_assets("img_card_bg.png"))
             img_cards.append(card_img)
             self.images.append(card_img)  # Store reference
-            self.canvas.create_image(635.0, y, image=card_img)
+            # Store canvas ID for each card so we can show/hide them
+            card_id = self.canvas.create_image(635.0, y, image=card_img)
+            self.card_canvas_ids.append(card_id)
+            # Hide all cards initially
+            self.canvas.itemconfig(card_id, state='hidden')
 
         # Entry field configurations - using loops for all 4 rows (adjusted y-positions)
         entry_configs = [
@@ -183,14 +197,17 @@ class DocumentWindow:
 
         # Create entry fields using loops
         self.entry_fields = []
+        
         for row_idx, config in enumerate(entry_configs):
             row_entries = {}
+            row_bg_ids = []  # Store background IDs for this row
             
             for entry_config in config['entries']:
                 # Create entry background image
                 entry_img = PhotoImage(file=relative_to_assets(f"entry_{entry_config['type']}.png"))
                 self.images.append(entry_img)  # Store reference
-                self.canvas.create_image(entry_config['x_center'], config['y_center'], image=entry_img)
+                bg_id = self.canvas.create_image(entry_config['x_center'], config['y_center'], image=entry_img)
+                row_bg_ids.append(bg_id)  # Store background ID
                 
                 # Create entry field
                 entry = Entry(
@@ -214,6 +231,7 @@ class DocumentWindow:
                 row_entries[entry_config['type']] = entry
             
             self.entry_fields.append(row_entries)
+            self.entry_bg_ids.append(row_bg_ids)  # Store all background IDs for this row
 
         # Buttons (adjusted y-positions)
         button_image_1 = PhotoImage(file=relative_to_assets("button_new_request.png"))
@@ -343,6 +361,9 @@ class DocumentWindow:
 
     def update_display(self):
         """Update the display with current page data"""
+        # First, remove any existing "no records" text
+        self.canvas.delete("no_records_text")
+        
         # Clear all entries first
         for row in self.entry_fields:
             for entry in row.values():
@@ -355,15 +376,110 @@ class DocumentWindow:
             self.payment_buttons[i].place_forget()
             self.view_docu_buttons[i].place_forget()
         
+        # Hide all cards initially
+        for card_id in self.card_canvas_ids:
+            self.canvas.itemconfig(card_id, state='hidden')
+        
+        # Hide all entry field backgrounds and widgets initially
+        for row_idx, row_bg_ids in enumerate(self.entry_bg_ids):
+            for bg_id in row_bg_ids:
+                self.canvas.itemconfig(bg_id, state='hidden')
+        
+        for row in self.entry_fields:
+            for entry_name, entry_widget in row.items():
+                # Hide the entry widgets themselves
+                entry_widget.place_forget()
+        
+        # Show "No records found" message if no requests exist
+        if not self.document_requests:
+            self.show_no_records_message()
+            return
+        
         # Calculate start and end indices for current page
         start_idx = (self.current_page - 1) * self.requests_per_page
         end_idx = start_idx + self.requests_per_page
         current_requests = self.document_requests[start_idx:end_idx]
         
-        # Fill entries with current page data
+        # Show only the cards and entries that have data
         for i, request in enumerate(current_requests):
             if i < len(self.entry_fields):
+                # Show the card for this row
+                if i < len(self.card_canvas_ids):
+                    self.canvas.itemconfig(self.card_canvas_ids[i], state='normal')
+                
+                # Show entry backgrounds for this row
+                if i < len(self.entry_bg_ids):
+                    for bg_id in self.entry_bg_ids[i]:
+                        self.canvas.itemconfig(bg_id, state='normal')
+                
                 row = self.entry_fields[i]
+                
+                # Show all entry fields for this row by re-placing them
+                entry_configs = [
+                    # Row 1 positions
+                    {
+                        'y_center': 203.0, 'y_pos': 183.0,
+                        'entries': [
+                            {'type': 'delivery_type', 'x_center': 915.0, 'x_pos': 883.0, 'width': 64.0},
+                            {'type': 'requestno', 'x_center': 183.0, 'x_pos': 93.0, 'width': 180.0},
+                            {'type': 'docu_type', 'x_center': 433.0, 'x_pos': 304.0, 'width': 258.0},
+                            {'type': 'docu_status', 'x_center': 1022.0, 'x_pos': 978.0, 'width': 88.0},
+                            {'type': 'amount_pay', 'x_center': 822.5, 'x_pos': 793.0, 'width': 59.0},
+                            {'type': 'docu_copy', 'x_center': 609.5, 'x_pos': 593.0, 'width': 33.0},
+                            {'type': 'release_date', 'x_center': 709.5, 'x_pos': 657.0, 'width': 105.0}
+                        ]
+                    },
+                    # Row 2 positions
+                    {
+                        'y_center': 295.0, 'y_pos': 275.0,
+                        'entries': [
+                            {'type': 'delivery_type', 'x_center': 915.0, 'x_pos': 883.0, 'width': 64.0},
+                            {'type': 'requestno', 'x_center': 183.0, 'x_pos': 93.0, 'width': 180.0},
+                            {'type': 'docu_type', 'x_center': 433.0, 'x_pos': 304.0, 'width': 258.0},
+                            {'type': 'docu_status', 'x_center': 1022.0, 'x_pos': 978.0, 'width': 88.0},
+                            {'type': 'amount_pay', 'x_center': 822.5, 'x_pos': 793.0, 'width': 59.0},
+                            {'type': 'docu_copy', 'x_center': 609.5, 'x_pos': 593.0, 'width': 33.0},
+                            {'type': 'release_date', 'x_center': 709.5, 'x_pos': 657.0, 'width': 105.0}
+                        ]
+                    },
+                    # Row 3 positions
+                    {
+                        'y_center': 387.0, 'y_pos': 367.0,
+                        'entries': [
+                            {'type': 'delivery_type', 'x_center': 915.0, 'x_pos': 883.0, 'width': 64.0},
+                            {'type': 'requestno', 'x_center': 183.0, 'x_pos': 93.0, 'width': 180.0},
+                            {'type': 'docu_type', 'x_center': 433.0, 'x_pos': 304.0, 'width': 258.0},
+                            {'type': 'docu_status', 'x_center': 1022.0, 'x_pos': 978.0, 'width': 88.0},
+                            {'type': 'amount_pay', 'x_center': 822.5, 'x_pos': 793.0, 'width': 59.0},
+                            {'type': 'docu_copy', 'x_center': 609.5, 'x_pos': 593.0, 'width': 33.0},
+                            {'type': 'release_date', 'x_center': 709.5, 'x_pos': 657.0, 'width': 105.0}
+                        ]
+                    },
+                    # Row 4 positions
+                    {
+                        'y_center': 479.0, 'y_pos': 459.0,
+                        'entries': [
+                            {'type': 'delivery_type', 'x_center': 915.0, 'x_pos': 883.0, 'width': 64.0},
+                            {'type': 'requestno', 'x_center': 183.0, 'x_pos': 93.0, 'width': 180.0},
+                            {'type': 'docu_type', 'x_center': 433.0, 'x_pos': 304.0, 'width': 258.0},
+                            {'type': 'docu_status', 'x_center': 1022.0, 'x_pos': 978.0, 'width': 88.0},
+                            {'type': 'amount_pay', 'x_center': 822.5, 'x_pos': 793.0, 'width': 59.0},
+                            {'type': 'docu_copy', 'x_center': 609.5, 'x_pos': 593.0, 'width': 33.0},
+                            {'type': 'release_date', 'x_center': 709.5, 'x_pos': 657.0, 'width': 105.0}
+                        ]
+                    }
+                ]
+                
+                # Place each entry widget at its correct position
+                for entry_config in entry_configs[i]['entries']:
+                    entry_name = entry_config['type']
+                    if entry_name in row:
+                        row[entry_name].place(
+                            x=entry_config['x_pos'],
+                            y=entry_configs[i]['y_pos'],
+                            width=entry_config['width'],
+                            height=38.0
+                        )
                 
                 # Format delivery type
                 delivery_type = "Online" if request['delivery_mode'] == 'online' else "Pickup"
@@ -373,7 +489,7 @@ class DocumentWindow:
                 if request['payment_status'] == 'pending' and request['status'] == 'submitted':
                     status = "Payment Pending"
                 
-                # Update entries
+                # Update entries with actual data
                 row['requestno'].config(state="normal")
                 row['requestno'].delete(0, "end")
                 row['requestno'].insert(0, request['request_number'])
@@ -410,7 +526,7 @@ class DocumentWindow:
                 row['docu_status'].config(state="readonly")
                 
                 # Show appropriate button based on status
-                button_y_positions = [184.0, 276.0, 368.0, 460.0]  # Adjusted y-positions
+                button_y_positions = [184.0, 276.0, 368.0, 460.0]
                 
                 if status.lower() == "payment pending":
                     # Show payment button
@@ -426,6 +542,46 @@ class DocumentWindow:
         # Update button states
         self.button_prev_page.config(state="normal" if self.current_page > 1 else "disabled")
         self.button_next_page.config(state="normal" if self.current_page < total_pages else "disabled")
+
+    def show_no_records_message(self):
+        """Show a message when no document requests exist"""
+        # Hide all cards
+        for card_id in self.card_canvas_ids:
+            self.canvas.itemconfig(card_id, state='hidden')
+        
+        # Hide all entry backgrounds
+        for row_idx, row_bg_ids in enumerate(self.entry_bg_ids):
+            for bg_id in row_bg_ids:
+                self.canvas.itemconfig(bg_id, state='hidden')
+        
+        # Hide all entry fields
+        for row in self.entry_fields:
+            for entry_widget in row.values():
+                entry_widget.place_forget()
+        
+        # Hide all buttons
+        for i in range(len(self.payment_buttons)):
+            self.payment_buttons[i].place_forget()
+            self.view_docu_buttons[i].place_forget()
+        
+        # Remove any existing "no records" text and create new one
+        self.canvas.delete("no_records_text")
+        self.canvas.create_text(
+            635.0,  # Center x
+            300.0,  # Center y
+            text="No document requests found",
+            fill="#666666",
+            font=("Inter", 16, "bold"),
+            anchor="center",
+            tags="no_records_text"
+        )
+        
+        # Set page display
+        self.page_var.set("Page 1 of 1")
+        
+        # Disable navigation buttons
+        self.button_prev_page.config(state="disabled")
+        self.button_next_page.config(state="disabled")
 
     def new_request(self):
         """Open new document request form"""

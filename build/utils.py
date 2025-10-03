@@ -61,19 +61,7 @@ class UtilityFunctions:
             return f"PDM-{year_part}-{number_part}"
         
         return student_number.upper()
-    
-    @staticmethod
-    def calculate_fee(document_type_id, quantity=1):
-        """Calculate fee for document request"""
-        base_fees = {
-            1: 250.00,  # TOR
-            2: 100.00,  # Certificate of Enrollment
-            3: 150.00,  # Good Moral Certificate
-            4: 300.00,  # Honorable Dismissal
-            5: 500.00   # Diploma
-        }
-        base_fee = base_fees.get(document_type_id, 0.00)
-        return base_fee * quantity
+
 
 class EmailService:
     def __init__(self):
