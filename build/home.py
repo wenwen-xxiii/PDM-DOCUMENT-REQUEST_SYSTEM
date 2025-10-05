@@ -266,6 +266,11 @@ class HomeWindow:
         self.current_content = "document"
         self.clear_content()
         
+        # Debug the user_data being passed
+        print(f"🔍 DEBUG: Passing user_data to DocumentWindow: {self.user_data}")
+        print(f"🔍 DEBUG: User ID in user_data: {self.user_data.get('user_id')}")
+        print(f"🔍 DEBUG: Student number in user_data: {self.user_data.get('student_number')}")
+        
         navigation_callbacks = {
             'home': self.show_home,
             'programs': self.show_programs,
@@ -273,16 +278,15 @@ class HomeWindow:
             'logout': self.logout
         }
         
-        # FIX: Pass self.parent (the main window) instead of self.show_home (function)
+        # FIX: Ensure we're passing the correct user_data
         self.document_window = DocumentWindow(
-            parent=self.parent,  # Changed from self.show_home to self.parent
-            user_data=self.user_data,
+            parent=self.parent,
+            user_data=self.user_data,  # Make sure this is the correct user data
             user_type=self.user_type,
             get_db_connection=self.get_db_connection,
             navigation_callbacks=navigation_callbacks
         )
         
-
     def show_profile(self):
         """Show user profile using the separate ProfileWindow"""
         self.current_content = "profile"

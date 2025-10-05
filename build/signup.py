@@ -295,13 +295,13 @@ class SignupWindow:
             cursor = db_connection.cursor(dictionary=True)
 
             # Check if email already exists in users table
-            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
             if cursor.fetchone():
                 messagebox.showerror("Error", "Email already registered")
                 return
 
             # Check if student number exists and is not already linked
-            cursor.execute("SELECT id, user_id FROM students WHERE student_number = %s", (student_number,))
+            cursor.execute("SELECT student_id, user_id FROM students WHERE student_number = %s", (student_number,))
             student_record = cursor.fetchone()
 
             if student_record and student_record['user_id']:
@@ -393,7 +393,7 @@ class SignupWindow:
             
             # 2. Check if student record already exists without user_id
             cursor.execute("""
-                SELECT id, first_name, last_name, middle_name, course, year_level 
+                SELECT student_id, first_name, last_name, middle_name, course, year_level 
                 FROM students 
                 WHERE student_number = %s AND user_id IS NULL
             """, (self.user_data['student_number'],))
@@ -405,10 +405,10 @@ class SignupWindow:
                 cursor.execute("""
                     UPDATE students 
                     SET user_id = %s, date_enrolled = %s 
-                    WHERE id = %s
-                """, (user_id, enrollment_date, existing_student['id']))
+                    WHERE student_id = %s
+                """, (user_id, enrollment_date, existing_student['student_id']))
                 
-                student_id = existing_student['id']
+                student_id = existing_student['student_id']
                 first_name = existing_student['first_name']
                 last_name = existing_student['last_name']
                 middle_name = existing_student['middle_name']

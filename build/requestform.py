@@ -306,7 +306,7 @@ class DocumentRequestWindow:
             cursor = connection.cursor(dictionary=True)
             
             cursor.execute("""
-                SELECT id, code, name, fee_amount, processing_days 
+                SELECT document_type_id, code, name, fee_amount, processing_days 
                 FROM document_types 
                 WHERE is_available = TRUE
                 ORDER BY name
@@ -409,7 +409,7 @@ class DocumentRequestWindow:
         return f"PDM-{year}-{month_day}-{daily_count:03d}"
 
     def submit_request(self):
-        """Submit the document request"""
+        """Submit the document request and return to dashboard"""
         # Validation
         if not self.selected_document_type:
             messagebox.showerror("Error", "Please select a document type")
@@ -435,7 +435,7 @@ class DocumentRequestWindow:
             # Generate request number
             request_number = self.generate_request_number(connection)
             
-            # Insert document request - MATCHING YOUR DATABASE SCHEMA
+            # Insert document request
             cursor.execute("""
                 INSERT INTO document_requests (
                     request_number, student_id, document_type_id, purpose_details,
@@ -445,11 +445,11 @@ class DocumentRequestWindow:
             """, (
                 request_number,
                 self.student_id,
-                self.selected_document_type['id'],
+                self.selected_document_type['document_type_id'],
                 self.text_purpose.get("1.0", "end-1c").strip(),
                 quantity,
                 self.delivery_mode,
-                self.releasing_date_var.get(),  # This matches request_release_date
+                self.releasing_date_var.get(),
                 float(self.selected_document_type['fee_amount']) * quantity,
                 'payment_pending',
                 'pending'
@@ -458,20 +458,23 @@ class DocumentRequestWindow:
             connection.commit()
             
             messagebox.showinfo(
-                "Success", 
+                "Success!", 
                 f"Document request submitted successfully!\n\n"
                 f"Request Number: {request_number}\n"
                 f"Document: {self.selected_document_type['name']}\n"
                 f"Quantity: {quantity}\n"
                 f"Total Amount: {self.total_var.get()}\n"
-                f"Expected Release Date: {self.releasing_date_var.get()}"
+                f"Expected Release Date: {self.releasing_date_var.get()}\n\n"
+                f"You can now proceed to payment from your dashboard."
             )
             
-            # Return to dashboard
+            # Always return to dashboard
             self.go_back()
-            
+                
         except mysql.connector.Error as e:
             messagebox.showerror("Database Error", f"Failed to submit request: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
         finally:
             if connection and connection.is_connected():
                 cursor.close()
@@ -489,15 +492,3 @@ class DocumentRequestWindow:
         # The window will be managed by the parent
         pass
 
-# For testing purposes
-if __name__ == "__main__":
-    # Mock student ID for testing
-    student_id = 1
-    
-    def mock_dashboard_callback():
-        print("Returning to dashboard...")
-    
-    # Create a root window for testing
-    root = Tk()
-    app = DocumentRequestWindow(root, student_id, mock_dashboard_callback)
-    root.mainloop()

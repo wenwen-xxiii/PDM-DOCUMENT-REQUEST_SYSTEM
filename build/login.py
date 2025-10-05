@@ -188,7 +188,7 @@ class LoginWindow:
                 cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
-                    LEFT JOIN students s ON u.id = s.user_id 
+                    LEFT JOIN students s ON u.user_id = s.user_id 
                     WHERE u.email = %s AND u.is_verified = TRUE AND u.is_active = TRUE
                 """, (username_input,))
             else:
@@ -196,7 +196,7 @@ class LoginWindow:
                 cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
-                    LEFT JOIN students s ON u.id = s.user_id 
+                    LEFT JOIN students s ON u.user_id = s.user_id 
                     WHERE (u.username = %s OR s.student_number = %s) 
                     AND u.is_verified = TRUE AND u.is_active = TRUE
                 """, (username_input, username_input))
@@ -206,7 +206,7 @@ class LoginWindow:
             if user and UtilityFunctions.verify_password(password, user['password_hash']):
                 # Prepare user data for session
                 user_data = {
-                    'id': user['id'],
+                    'user_id': user['user_id'],
                     'username': user['username'],
                     'email': user['email'],
                     'first_name': user.get('first_name', ''),
@@ -220,7 +220,7 @@ class LoginWindow:
                 # Check if student has outstanding obligations
                 if user['user_type'] == 'student':
                     from utils import ValidationHelper
-                    if not ValidationHelper.validate_student_clearance(db_connection, user['id']):
+                    if not ValidationHelper.validate_student_clearance(db_connection, user['user_id']):
                         messagebox.showerror(
                             "Clearance Issue", 
                             "Cannot proceed. You have outstanding obligations. Please contact the registrar's office."

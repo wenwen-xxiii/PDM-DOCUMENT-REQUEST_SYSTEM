@@ -33,14 +33,14 @@ class DatabaseInitializer:
             return False
     
     def create_tables(self):
-        """Create all necessary tables with normalized structure"""
+        """Create all necessary tables with consistent naming"""
         try:
             cursor = self.connection.cursor()
             
             # User Accounts table (for authentication)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(50) UNIQUE NOT NULL,
                     email VARCHAR(100) UNIQUE NOT NULL,
                     password_hash VARCHAR(255) NOT NULL,
@@ -56,7 +56,7 @@ class DatabaseInitializer:
             # Students table (student-specific data)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS students (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    student_id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT UNIQUE,
                     student_number VARCHAR(20) UNIQUE NOT NULL,
                     first_name VARCHAR(50) NOT NULL,
@@ -73,16 +73,16 @@ class DatabaseInitializer:
                     has_obligations BOOLEAN DEFAULT FALSE,
                     obligations_details TEXT,
                     profile_picture longblob,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 )
             """)
             
             # Registrar/Admin Staff table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS staff (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    staff_id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT UNIQUE NOT NULL,
-                    staff_id VARCHAR(20) UNIQUE NOT NULL,
+                    staff_number VARCHAR(20) UNIQUE NOT NULL,
                     first_name VARCHAR(50) NOT NULL,
                     last_name VARCHAR(50) NOT NULL,
                     position VARCHAR(100) NOT NULL,
@@ -91,14 +91,14 @@ class DatabaseInitializer:
                     office_location VARCHAR(100),
                     is_active BOOLEAN DEFAULT TRUE,
                     hire_date DATE,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 )
             """)
             
             # Document Types table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS document_types (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    document_type_id INT AUTO_INCREMENT PRIMARY KEY,
                     code VARCHAR(10) UNIQUE NOT NULL,
                     name VARCHAR(100) NOT NULL,
                     description TEXT,
@@ -109,14 +109,14 @@ class DatabaseInitializer:
                     created_by INT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (created_by) REFERENCES users(id)
+                    FOREIGN KEY (created_by) REFERENCES users(user_id)
                 )
             """)
             
             # Document Requests table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS document_requests (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT AUTO_INCREMENT PRIMARY KEY,
                     request_number VARCHAR(20) UNIQUE NOT NULL,
                     student_id INT NOT NULL,
                     document_type_id INT NOT NULL,
@@ -130,23 +130,22 @@ class DatabaseInitializer:
                     total_amount DECIMAL(10,2) DEFAULT 0.00,
                     payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',
                     payment_method ENUM('online', 'cash', 'gcash', 'bank_transfer') DEFAULT 'online',
-                    payment_reference VARCHAR(100),
                     payment_date TIMESTAMP NULL,
                     payment_intent_id VARCHAR(255),
                     processed_by INT NULL,
                     processed_date TIMESTAMP NULL,
                     ready_date TIMESTAMP NULL,
                     completed_date TIMESTAMP NULL,
-                    FOREIGN KEY (student_id) REFERENCES students(id),
-                    FOREIGN KEY (document_type_id) REFERENCES document_types(id),
-                    FOREIGN KEY (processed_by) REFERENCES staff(id)
+                    FOREIGN KEY (student_id) REFERENCES students(student_id),
+                    FOREIGN KEY (document_type_id) REFERENCES document_types(document_type_id),
+                    FOREIGN KEY (processed_by) REFERENCES staff(staff_id)
                 )
             """)
             
             # Payments table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS payments (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    payment_id INT AUTO_INCREMENT PRIMARY KEY,
                     request_id INT NOT NULL,
                     amount DECIMAL(10,2) NOT NULL,
                     payment_method VARCHAR(50) NOT NULL,
@@ -157,14 +156,14 @@ class DatabaseInitializer:
                     paid_at TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (request_id) REFERENCES document_requests(id) ON DELETE CASCADE
+                    FOREIGN KEY (request_id) REFERENCES document_requests(request_id) ON DELETE CASCADE
                 )
             """)
             
             # Notifications table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS notifications (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    notification_id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT NOT NULL,
                     title VARCHAR(200) NOT NULL,
                     message TEXT NOT NULL,
@@ -175,15 +174,15 @@ class DatabaseInitializer:
                     scheduled_at TIMESTAMP NULL,
                     sent_at TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (related_request_id) REFERENCES document_requests(id) ON DELETE SET NULL
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                    FOREIGN KEY (related_request_id) REFERENCES document_requests(request_id) ON DELETE SET NULL
                 )
             """)
             
             # Feedback table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS feedback (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    feedback_id INT AUTO_INCREMENT PRIMARY KEY,
                     request_id INT NOT NULL,
                     rating INT CHECK (rating >= 1 AND rating <= 5),
                     comments TEXT,
@@ -194,15 +193,15 @@ class DatabaseInitializer:
                     responded_by INT NULL,
                     responded_at TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (request_id) REFERENCES document_requests(id) ON DELETE CASCADE,
-                    FOREIGN KEY (responded_by) REFERENCES staff(id)
+                    FOREIGN KEY (request_id) REFERENCES document_requests(request_id) ON DELETE CASCADE,
+                    FOREIGN KEY (responded_by) REFERENCES staff(staff_id)
                 )
             """)
             
             # Student Academic Records table (for verification)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS academic_records (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    academic_record_id INT AUTO_INCREMENT PRIMARY KEY,
                     student_id INT NOT NULL,
                     course VARCHAR(100) NOT NULL,
                     year_level VARCHAR(20) NOT NULL,
@@ -216,15 +215,15 @@ class DatabaseInitializer:
                     record_date DATE NOT NULL,
                     verified_by INT NULL,
                     verified_at TIMESTAMP NULL,
-                    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-                    FOREIGN KEY (verified_by) REFERENCES staff(id)
+                    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+                    FOREIGN KEY (verified_by) REFERENCES staff(staff_id)
                 )
             """)
             
             # System Settings table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS system_settings (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    setting_id INT AUTO_INCREMENT PRIMARY KEY,
                     category VARCHAR(50) NOT NULL,
                     setting_key VARCHAR(100) UNIQUE NOT NULL,
                     setting_value TEXT NOT NULL,
@@ -233,14 +232,14 @@ class DatabaseInitializer:
                     is_public BOOLEAN DEFAULT FALSE,
                     updated_by INT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (updated_by) REFERENCES users(id)
+                    FOREIGN KEY (updated_by) REFERENCES users(user_id)
                 )
             """)
             
             # Audit Log table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    audit_log_id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT NULL,
                     action VARCHAR(100) NOT NULL,
                     table_name VARCHAR(50),
@@ -250,7 +249,7 @@ class DatabaseInitializer:
                     ip_address VARCHAR(45),
                     user_agent TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
                 )
             """)
             
@@ -271,14 +270,14 @@ class DatabaseInitializer:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_types_available ON document_types(is_available)")
             
-            print("✓ All tables created successfully with normalized structure")
+            print("✓ All tables created successfully with consistent naming")
             return True
         except Error as e:
             print(f"❌ Error creating tables: {e}")
             return False
     
     def insert_initial_data(self):
-        """Insert initial data into tables with normalized structure"""
+        """Insert initial data into tables with consistent naming"""
         try:
             cursor = self.connection.cursor()
             
@@ -308,13 +307,13 @@ class DatabaseInitializer:
             
             # Create admin staff record
             cursor.execute("""
-                INSERT IGNORE INTO staff (user_id, staff_id, first_name, last_name, position, department) 
+                INSERT IGNORE INTO staff (user_id, staff_number, first_name, last_name, position, department) 
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (admin_user_id, 'ADMIN001', 'System', 'Administrator', 'System Administrator', 'IT Department'))
             
             # Create registrar staff record
             cursor.execute("""
-                INSERT IGNORE INTO staff (user_id, staff_id, first_name, last_name, position, department) 
+                INSERT IGNORE INTO staff (user_id, staff_number, first_name, last_name, position, department) 
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (registrar_user_id, 'REG001', 'Maria', 'Santos', 'Registrar', 'Registrar Office'))
             
@@ -337,7 +336,7 @@ class DatabaseInitializer:
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, [(code, name, desc, fee, days, clearance, admin_user_id) for code, name, desc, fee, days, clearance in document_types])
             
-            # Insert sample student records - FIXED: Correct number of parameters
+            # Insert sample student records
             student_records = [
                 # Wendell Rebusit (with user_id 3)
                 (3, 'PDM-2023-003139', 'Wendell', 'Rebusit', 'Fernandez', '1998-09-23', 'Male', 'BS Information Technology', '3rd Year', '09270786707', 'Iloilo City', 'Enrolled', '2023-06-01', False, None),
@@ -383,7 +382,7 @@ class DatabaseInitializer:
             """, settings)
             
             self.connection.commit()
-            print("✓ Initial data inserted successfully with normalized structure")
+            print("✓ Initial data inserted successfully with consistent naming")
             
             # Display created accounts and students
             print("\n📋 Default Accounts Created:")

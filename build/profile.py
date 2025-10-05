@@ -688,7 +688,7 @@ class ProfileWindow:
             cursor.execute("""
                 SELECT s.*, u.email 
                 FROM students s 
-                JOIN users u ON s.user_id = u.id 
+                JOIN users u ON s.user_id = u.user_id 
                 WHERE s.student_number = %s
             """, (self.user_data.get('student_number'),))
             
@@ -819,7 +819,7 @@ class ProfileWindow:
                 cursor.execute("""
                     UPDATE users 
                     SET email = %s 
-                    WHERE id = (SELECT user_id FROM students WHERE student_number = %s)
+                    WHERE user_id = (SELECT user_id FROM students WHERE student_number = %s)
                 """, (self.entry_email.get(), self.user_data['student_number']))
 
             connection.commit()
