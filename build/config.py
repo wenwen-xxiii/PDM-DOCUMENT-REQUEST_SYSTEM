@@ -1,4 +1,3 @@
-#config.py
 import os
 from dotenv import load_dotenv
 
@@ -35,7 +34,16 @@ APP_CONFIG = {
     'secret_key': os.getenv('APP_SECRET_KEY', 'default-secret-key-change-in-production')
 }
 
+# PayMongo Configuration
 PAYMONGO_CONFIG = {
-    'secret_key': os.getenv('PAYMONGO_SECRET_KEY',''),
-    'public_key': os.getenv('PAYMONGO_PUBLIC_KEY', '')
-}            
+    'secret_key': os.getenv('PAYMONGO_SECRET_KEY', ''),
+    'public_key': os.getenv('PAYMONGO_PUBLIC_KEY', ''),
+    'webhook_key': os.getenv('PAYMONGO_SECRET_KEY_WEBHOOK', ''),
+    'api_url': os.getenv('PAYMONGO_API_URL', 'https://api.paymongo.com/v1')
+}
+
+# Ngrok Configuration
+NGROK_CONFIG = {
+    'auth_token': os.getenv('NGROK_AUTH_TOKEN', ''),
+    'port': int(os.getenv('NGROK_PORT', '5000'))
+}
