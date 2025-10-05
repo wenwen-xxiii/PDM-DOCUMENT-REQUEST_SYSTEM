@@ -1,4 +1,3 @@
-# otp.py
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import time
@@ -30,6 +29,11 @@ class OTPVerificationWindow:
         self.get_db_connection = get_db_connection
         self.otp_entries = []
         self.otp_expiry_time = time.time() + 180  # 3 minutes
+        self._is_destroyed = False  # Track if window is destroyed
+        self._timer_id = None  # Track the timer
+        
+        # Store references to all widgets we create
+        self.widgets = []
         
         self.setup_ui()
         self.start_otp_timer()
@@ -45,6 +49,7 @@ class OTPVerificationWindow:
             relief="ridge"
         )
         self.canvas.place(x=0, y=0)
+        self.widgets.append(self.canvas)
         
         # Background and design elements
         self.canvas.create_rectangle(0.0, 0.0, 670.0, 400.0, fill="#FFA500", outline="")
@@ -82,6 +87,7 @@ class OTPVerificationWindow:
             relief="flat"
         )
         self.button_verify.place(x=373.0, y=283.0, width=265.0, height=40.0)
+        self.widgets.append(self.button_verify)
 
         # Resend OTP button
         self.button_image_2 = PhotoImage(file=relative_to_assets("buttonLbl_resendotp.png"))
@@ -90,9 +96,11 @@ class OTPVerificationWindow:
             borderwidth=0,
             highlightthickness=0,
             command=self.resend_otp,
-            relief="flat"
+            relief="flat",
+            state='disabled'  # Initially disabled
         )
         self.buttonLbl_resendotp.place(x=400.0, y=347.0, width=212.0, height=18.0)
+        self.widgets.append(self.buttonLbl_resendotp)
 
         # Email icon
         self.image_image_2 = PhotoImage(file=relative_to_assets("image_otpmail.png"))
@@ -118,6 +126,7 @@ class OTPVerificationWindow:
             relief="flat"
         )
         self.button_back.place(x=624.0, y=16.0, width=30.0, height=30.0)
+        self.widgets.append(self.button_back)
 
         # Set tab order for proper navigation
         self.setup_tab_order()
@@ -241,6 +250,7 @@ class OTPVerificationWindow:
             entry.bind('<FocusIn>', lambda e, entry=entry: self.on_otp_focusin(entry))
             
             self.otp_entries.append(entry)
+            self.widgets.append(entry)
 
         # Focus on first OTP entry when window loads
         if self.otp_entries:
@@ -321,20 +331,37 @@ class OTPVerificationWindow:
             messagebox.showinfo("Success", "New OTP sent to your email!")
             if self.otp_entries:
                 self.otp_entries[0].focus()
+            
+            # Reset timer and disable resend button
+            self.buttonLbl_resendotp.config(state='disabled')
+            self.start_otp_timer()
         else:
             messagebox.showerror("Error", "Failed to send OTP. Please try again.")
 
     def start_otp_timer(self):
         """Start timer to check OTP expiry"""
-        self.check_otp_expiry()
+        # Cancel any existing timer
+        if self._timer_id:
+            self.parent.after_cancel(self._timer_id)
+        self._timer_id = self.parent.after(1000, self.check_otp_expiry)
 
     def check_otp_expiry(self):
         """Check if OTP has expired"""
+        # Check if window is destroyed before accessing widgets
+        if self._is_destroyed:
+            return
+            
         remaining_time = self.otp_expiry_time - time.time()
         if remaining_time <= 0:
-            self.buttonLbl_resendotp.config(state='normal')
+            # Enable resend button only if window still exists and widget exists
+            if (not self._is_destroyed and 
+                hasattr(self, 'buttonLbl_resendotp') and 
+                self.buttonLbl_resendotp.winfo_exists()):
+                self.buttonLbl_resendotp.config(state='normal')
         else:
-            self.parent.after(1000, self.check_otp_expiry)
+            # Schedule next check only if window still exists
+            if not self._is_destroyed:
+                self._timer_id = self.parent.after(1000, self.check_otp_expiry)
 
     def go_back(self):
         """Go back to previous screen"""
@@ -342,6 +369,21 @@ class OTPVerificationWindow:
         self.back_callback()
 
     def destroy(self):
-        """Clean up the window"""
-        for widget in self.parent.winfo_children():
-            widget.destroy()
+        """Clean up only the OTP window widgets"""
+        # Mark as destroyed to prevent timer callbacks
+        self._is_destroyed = True
+        
+        # Cancel any pending timers
+        if self._timer_id:
+            try:
+                self.parent.after_cancel(self._timer_id)
+            except:
+                pass  # Timer might already be cancelled
+        
+        # Destroy only the widgets we created, not all widgets in parent
+        for widget in self.widgets:
+            try:
+                if widget.winfo_exists():
+                    widget.destroy()
+            except:
+                pass  # Widget might already be destroyed
