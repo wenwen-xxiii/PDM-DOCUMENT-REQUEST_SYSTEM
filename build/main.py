@@ -1,4 +1,4 @@
-#main.py
+# main.py
 import tkinter as tk
 from tkinter import messagebox
 import mysql.connector
@@ -7,6 +7,7 @@ from login import LoginWindow
 from signup import SignupWindow
 from forgotpass import ForgotPasswordWindow
 from home import HomeWindow
+from admindashboard import AdminDashboard  # Add this import
 from config import DB_CONFIG, APP_CONFIG
 import os, sys
 import time
@@ -194,7 +195,7 @@ class DocumentRequestSystem:
         ForgotPasswordWindow(self.root, self.show_login, self.get_db_connection)
     
     def login_success_callback(self, user_data, user_type):
-        """Callback after successful login - resize to home size"""
+        """Callback after successful login - redirect based on user type"""
         self.current_user = user_data
         self.user_type = user_type
         
@@ -202,7 +203,34 @@ class DocumentRequestSystem:
         if APP_CONFIG['debug']:
             print(f"✓ User logged in: {user_data['email']} ({user_type})")
         
-        self.show_home()
+        # Redirect based on user type
+        if user_type == 'admin':
+            self.show_admin_dashboard()
+        else:
+            self.show_home()
+    
+    def show_admin_dashboard(self):
+        """Show admin dashboard"""
+        print("Showing admin dashboard...")  # Debug
+        self.clear_window()
+        
+        # Resize window for admin dashboard
+        self.root.geometry("1270x790")
+        self.center_window(1270, 790)
+        self.root.minsize(1270, 790)
+        self.root.resizable(False, False)
+        
+        # Give time for window to resize
+        self.root.update_idletasks()
+        self.root.update()
+        
+        # Create admin dashboard
+        AdminDashboard(
+            self.root,
+            self.current_user,
+            self.logout,
+            self.get_db_connection
+        )
     
     def show_home(self):
         """Show home window and resize to home size"""
