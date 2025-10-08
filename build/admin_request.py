@@ -110,7 +110,7 @@ class AdminRequestManager:
             relief="flat",
             command=self.previous_page
         )
-        self.button_prev.place(x=300, y=530, width=80, height=30)
+        self.button_prev.place(x=250, y=530, width=80, height=30)
 
         # Page number display
         self.entry_page_no = Entry(
@@ -123,7 +123,7 @@ class AdminRequestManager:
             state="readonly",
             font=("Inter", 10)
         )
-        self.entry_page_no.place(x=400, y=530, width=100, height=30)
+        self.entry_page_no.place(x=350, y=530, width=100, height=30)
 
         # Next button
         self.button_next = Button(
@@ -135,7 +135,19 @@ class AdminRequestManager:
             relief="flat",
             command=self.next_page
         )
-        self.button_next.place(x=520, y=530, width=80, height=30)
+        self.button_next.place(x=470, y=530, width=80, height=30)
+
+        # # Refresh button
+        # self.button_refresh = Button(
+        #     self.parent,
+        #     text="Refresh",
+        #     font=("Inter", 10),
+        #     bg="#792D1B",
+        #     fg="#FFDA0C",
+        #     relief="flat",
+        #     command=self.refresh_requests
+        # )
+        # self.button_refresh.place(x=570, y=530, width=80, height=30)
 
     def load_document_requests(self):
         """Load document requests from database using your schema"""
@@ -428,22 +440,24 @@ class AdminRequestManager:
                     attachments
                 )
             else:
-                # Use regular email service
-                success = email_service._send_email(student_email, subject, body)
+                # Use regular email service - remove the is_html parameter
+                success = email_service._send_email(
+                    student_email, 
+                    subject, 
+                    body
+                )
             
             if success:
-                print(f"✅ Email sent to {student_email}")
+                print(f"✅ PDM Email sent to {student_email}")
                 if attachments:
                     print(f"📎 Sent {len(attachments)} attachment(s) with email")
                 return True
             else:
-                print(f"❌ Failed to send email to {student_email}")
-                self._fallback_email_notification(student_email, subject, body, attachments)
+                print(f"❌ Failed to send PDM email to {student_email}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Email error: {e}")
-            self._fallback_email_notification(student_email, subject, body, attachments)
+            print(f"❌ PDM Email error: {e}")
             return False
     
     def _fallback_email_notification(self, student_email, subject, body, attachments=None):
@@ -458,104 +472,260 @@ class AdminRequestManager:
         print(f"Body: {body}")
         print("=" * 60)
 
-    def create_notification_message(self, request, action, has_attachments=False):
-        """Create appropriate notification message based on action"""
+    def create_notification_message(self, request, action, has_attachments=False, remarks=""):
+        """Create appropriate notification message based on action using HTML PDM format"""
         student_name = request['student_name']
         request_number = request['request_number']
         document_name = request['document_name']
         delivery_mode = request.get('delivery_mode', 'pickup')
+        current_date = datetime.now().strftime('%Y-%m-%d')
         
         if action == "payment_approved":
             subject = f"Payment Approved - Request #{request_number}"
             body = f"""
-            Dear {student_name},
-
-            Your payment for document request #{request_number} has been approved.
-
-            Document: {document_name}
-            Amount Paid: ₱{request.get('total_amount', 0):.2f}
-            Status: Under Review
-
-            Your document is now being processed. You will be notified when it's ready.
-
-            Best regards,
-            PDM Registrar's Office
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                    </div>
+                    
+                    <div style="padding: 30px;">
+                        <h2 style="color: #800000;">Payment Approved</h2>
+                        <p>Dear {student_name},</p>
+                        
+                        <p>Your payment for document request #{request_number} has been approved and your document is now being processed.</p>
+                        
+                        <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                            <p><strong>Request Number:</strong> #{request_number}</p>
+                            <p><strong>Document:</strong> {document_name}</p>
+                            <p><strong>Amount Paid:</strong> ₱{request.get('total_amount', 0):.2f}</p>
+                            <p><strong>Status:</strong> Under Review</p>
+                            <p><strong>Approval Date:</strong> {current_date}</p>
+                        </div>
+                        
+                        <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <h4 style="color: #155724; margin-top: 0;">Next Steps:</h4>
+                            <p style="color: #155724; margin: 5px 0;">Your document is now being processed by the Registrar's Office</p>
+                            <p style="color: #155724; margin: 5px 0;">You will be notified when your document is ready for {delivery_mode}</p>
+                        </div>
+                        
+                        <hr style="margin: 30px 0;">
+                        <p style="color: #666; font-size: 12px;">
+                            This is an automated message. Please do not reply to this email.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
             """
             
         elif action == "ready":
-            subject = f"Document Ready - Request #{request_number}"
             if delivery_mode == 'online':
+                subject = f"Document Ready for Download - Request #{request_number}"
                 body = f"""
-                Dear {student_name},
-
-                Your requested document for request #{request_number} is now ready for download.
-
-                Document: {document_name}
-
-                Your document has been processed and is ready. Please check your email for the attached document.
-
-                Best regards,
-                PDM Registrar's Office
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                        <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                            <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                            <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                        </div>
+                        
+                        <div style="padding: 30px;">
+                            <h2 style="color: #800000;">Document Ready for Download</h2>
+                            <p>Dear {student_name},</p>
+                            
+                            <p>Your document request has been processed and is ready for download.</p>
+                            
+                            <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                                <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                                <p><strong>Request Number:</strong> #{request_number}</p>
+                                <p><strong>Document:</strong> {document_name}</p>
+                                <p><strong>Status:</strong> Ready for Download</p>
+                                <p><strong>Ready Date:</strong> {current_date}</p>
+                            </div>
+                            
+                            <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <h4 style="color: #155724; margin-top: 0;">Download Information:</h4>
+                                <p style="color: #155724; margin: 5px 0;">Your document is attached to this email</p>
+                                <p style="color: #155724; margin: 5px 0;">Please download and save the document for your records</p>
+                            </div>
+                            
+                            <hr style="margin: 30px 0;">
+                            <p style="color: #666; font-size: 12px;">
+                                This is an automated message. Please do not reply to this email.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+                </html>
                 """
             else:
+                subject = f"Document Ready for Pickup - Request #{request_number}"
                 body = f"""
-                Dear {student_name},
-
-                Your requested document for request #{request_number} is now ready for pickup.
-
-                Document: {document_name}
-                Location: Registrar's Office
-                Hours: Monday-Friday, 8:00 AM - 5:00 PM
-
-                Please bring your student ID when picking up your document.
-
-                Best regards,
-                PDM Registrar's Office
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                        <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                            <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                            <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                        </div>
+                        
+                        <div style="padding: 30px;">
+                            <h2 style="color: #800000;">Document Ready for Pickup</h2>
+                            <p>Dear {student_name},</p>
+                            
+                            <p>Your document request has been processed and is ready for pickup.</p>
+                            
+                            <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                                <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                                <p><strong>Request Number:</strong> #{request_number}</p>
+                                <p><strong>Document:</strong> {document_name}</p>
+                                <p><strong>Status:</strong> Ready for Pickup</p>
+                                <p><strong>Ready Date:</strong> {current_date}</p>
+                            </div>
+                            
+                            <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <h4 style="color: #155724; margin-top: 0;">Pickup Information:</h4>
+                                <p style="color: #155724; margin: 5px 0;"><strong>Location:</strong> Registrar's Office</p>
+                                <p style="color: #155724; margin: 5px 0;"><strong>Hours:</strong> Monday-Friday, 8:00 AM - 5:00 PM</p>
+                                <p style="color: #155724; margin: 5px 0;"><strong>Requirements:</strong> Please bring your student ID</p>
+                            </div>
+                            
+                            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <h4 style="color: #856404; margin-top: 0;">Remarks from Registrar's Office:</h4>
+                                <p style="color: #856404; margin: 0;">{remarks if remarks else 'No remarks provided.'}</p>
+                            </div>
+                            
+                            <hr style="margin: 30px 0;">
+                            <p style="color: #666; font-size: 12px;">
+                                This is an automated message. Please do not reply to this email.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+                </html>
                 """
                 
         elif action == "completed":
             subject = f"Request Completed - #{request_number}"
             if delivery_mode == 'online':
                 body = f"""
-                Dear {student_name},
-
-                Your document request #{request_number} has been completed.
-
-                Document: {document_name}
-                Delivery Method: {delivery_mode.title()}
-
-                Your document has been delivered to your email. Please check your inbox and spam folder.
-
-                Thank you for using our document request system.
-
-                Best regards,
-                PDM Registrar's Office
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                        <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                            <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                            <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                        </div>
+                        
+                        <div style="padding: 30px;">
+                            <h2 style="color: #800000;">Request Completed</h2>
+                            <p>Dear {student_name},</p>
+                            
+                            <p>Your document request has been completed and delivered.</p>
+                            
+                            <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                                <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                                <p><strong>Request Number:</strong> #{request_number}</p>
+                                <p><strong>Document:</strong> {document_name}</p>
+                                <p><strong>Status:</strong> Completed</p>
+                                <p><strong>Completion Date:</strong> {current_date}</p>
+                                <p><strong>Delivery Method:</strong> Online Delivery</p>
+                            </div>
+                            
+                            <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <h4 style="color: #155724; margin-top: 0;">Delivery Information:</h4>
+                                <p style="color: #155724; margin: 5px 0;">Your document has been delivered to your email</p>
+                                <p style="color: #155724; margin: 5px 0;">Please check your inbox and spam folder</p>
+                            </div>
+                            
+                            <hr style="margin: 30px 0;">
+                            <p style="color: #666; font-size: 12px;">
+                                This is an automated message. Please do not reply to this email.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+                </html>
                 """
             else:
                 body = f"""
-                Dear {student_name},
-
-                Your document request #{request_number} has been completed.
-
-                Document: {document_name}
-                Delivery Method: {delivery_mode.title()}
-
-                Thank you for using our document request system.
-
-                Best regards,
-                PDM Registrar's Office
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                        <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                            <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                            <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                        </div>
+                        
+                        <div style="padding: 30px;">
+                            <h2 style="color: #800000;">Request Completed</h2>
+                            <p>Dear {student_name},</p>
+                            
+                            <p>Your document request has been completed.</p>
+                            
+                            <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                                <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                                <p><strong>Request Number:</strong> #{request_number}</p>
+                                <p><strong>Document:</strong> {document_name}</p>
+                                <p><strong>Status:</strong> Completed</p>
+                                <p><strong>Completion Date:</strong> {current_date}</p>
+                                <p><strong>Delivery Method:</strong> Campus Pickup</p>
+                            </div>
+                            
+                            <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                                <h4 style="color: #0c5460; margin-top: 0;">Thank You:</h4>
+                                <p style="color: #0c5460; margin: 5px 0;">Thank you for using the PDM Document Request System</p>
+                            </div>
+                            
+                            <hr style="margin: 30px 0;">
+                            <p style="color: #666; font-size: 12px;">
+                                This is an automated message. Please do not reply to this email.
+                            </p>
+                        </div>
+                    </div>
+                </body>
+                </html>
                 """
         else:
             subject = f"Update on Request #{request_number}"
             body = f"""
-            Dear {student_name},
-
-            There is an update on your document request #{request_number}.
-
-            Please check the document request system for the latest status.
-
-            Best regards,
-            PDM Registrar's Office
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                    </div>
+                    
+                    <div style="padding: 30px;">
+                        <h2 style="color: #800000;">Request Update</h2>
+                        <p>Dear {student_name},</p>
+                        
+                        <p>There is an update on your document request #{request_number}.</p>
+                        
+                        <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                            <p><strong>Request Number:</strong> #{request_number}</p>
+                            <p><strong>Document:</strong> {document_name}</p>
+                            <p><strong>Status:</strong> {self.format_status_display(request['status'], request.get('payment_status', 'pending'))}</p>
+                            <p><strong>Update Date:</strong> {current_date}</p>
+                        </div>
+                        
+                        <p>Please check the document request system for the latest status.</p>
+                        
+                        <hr style="margin: 30px 0;">
+                        <p style="color: #666; font-size: 12px;">
+                            This is an automated message. Please do not reply to this email.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
             """
         
         return subject, body
@@ -938,18 +1108,36 @@ class AdminRequestManager:
                 messagebox.showerror("Update Error", "Failed to mark request as completed.")
 
     def upload_document(self, request):
-        """Handle document upload for a request"""
+        """Handle document upload for a request with refresh callback"""
         try:
-            from admin_upload_docu import AdminUploadDocumentWindow
+            # Try to import the upload module
+            try:
+                from admin_upload_docu import AdminUploadDocumentWindow
+            except ImportError as e:
+                print(f"❌ Import error: {e}")
+                # Try alternative import path
+                try:
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    if current_dir not in sys.path:
+                        sys.path.append(current_dir)
+                    from admin_upload_docu import AdminUploadDocumentWindow
+                except ImportError as e2:
+                    print(f"❌ Alternative import failed: {e2}")
+                    messagebox.showerror("Error", f"Upload document module not found: {str(e)}")
+                    return
+            
+            print(f"🔄 Opening upload window for request {request['request_number']}")
+            print(f"🔄 Refresh callback available: {hasattr(self, 'refresh_requests')}")
             
             upload_window = AdminUploadDocumentWindow(
                 parent=self.parent,
-                request_data=request
+                request_data=request,
+                refresh_callback=self.refresh_requests
             )
+            print("✅ Upload window opened successfully")
             
-        except ImportError as e:
-            messagebox.showerror("Error", f"Upload document module not found: {str(e)}")
         except Exception as e:
+            print(f"❌ Error opening upload window: {e}")
             messagebox.showerror("Error", f"Failed to open upload window: {str(e)}")
 
     def show_no_requests_message(self):
@@ -985,6 +1173,11 @@ class AdminRequestManager:
 
     def refresh_requests(self):
         """Refresh the requests list"""
-        self.load_document_requests()
-        self.current_page = 1
-        self.update_display()
+        print("🔄 Refreshing admin requests...")
+        try:
+            self.load_document_requests()
+            self.current_page = 1
+            self.update_display()
+            print(f"✅ Refresh complete - {len(self.document_requests)} requests loaded")
+        except Exception as e:
+            print(f"❌ Error during refresh: {e}")

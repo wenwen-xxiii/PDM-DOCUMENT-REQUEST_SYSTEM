@@ -314,7 +314,7 @@ class PaymentWindow:
             self.pay_button.config(state="normal")
         
     def _process_cash_payment(self):
-        """Process cash payment"""
+        """Process cash payment with email notification"""
         try:
             # Disable payment button immediately
             self.pay_button.config(state="disabled")
@@ -346,12 +346,16 @@ class PaymentWindow:
             cursor.close()
             connection.close()
             
+            # Send email notification for cash payment
+            self._send_cash_payment_email(reference_number)
+            
             messagebox.showinfo(
                 "Cash Payment",
                 f"✅ Cash payment recorded successfully!\n\n"
                 f"🏦 Please proceed to the cashier's office to complete your payment.\n"
                 f"📋 Reference Number: {reference_number}\n"
-                f"💰 Amount: ₱{self.request_data['total_amount']:.2f}"
+                f"💰 Amount: ₱{self.request_data['total_amount']:.2f}\n\n"
+                f"📧 A confirmation email has been sent with payment details."
             )
             
             self.window.destroy()
@@ -363,6 +367,109 @@ class PaymentWindow:
             messagebox.showerror("Error", f"Failed to record cash payment: {str(e)}")
             # Re-enable button if error occurred
             self.pay_button.config(state="normal")
+
+    def _send_cash_payment_email(self, reference_number):
+        """Send email notification for cash payment with fallback"""
+        try:
+            # Try to import email service
+            try:
+                from utils import email_service
+                has_email_service = True
+            except ImportError:
+                has_email_service = False
+                
+            student_email = self.student_data.get('email')
+            if not student_email:
+                print("❌ No email found for student")
+                return False
+                
+            student_name = f"{self.student_data.get('first_name', '')} {self.student_data.get('last_name', '')}"
+            request_number = self.request_data['request_number']
+            document_name = self.request_data['document_name']
+            amount = self.request_data['total_amount']
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            
+            subject = f"Cash Payment Instructions - Request #{request_number}"
+            
+            body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                    </div>
+                    
+                    <div style="padding: 30px;">
+                        <h2 style="color: #800000;">Cash Payment Instructions</h2>
+                        <p>Dear {student_name},</p>
+                        
+                        <p>Your cash payment for document request #{request_number} has been recorded. Please proceed with the payment following the instructions below.</p>
+                        
+                        <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Payment Details:</h3>
+                            <p><strong>Request Number:</strong> #{request_number}</p>
+                            <p><strong>Document:</strong> {document_name}</p>
+                            <p><strong>Amount Due:</strong> ₱{amount:.2f}</p>
+                            <p><strong>Payment Method:</strong> Cash</p>
+                            <p><strong>Reference Number:</strong> {reference_number}</p>
+                            <p><strong>Payment Date:</strong> {current_date}</p>
+                        </div>
+                        
+                        <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <h4 style="color: #155724; margin-top: 0;">Payment Instructions:</h4>
+                            <p style="color: #155724; margin: 5px 0;"><strong>1. Location:</strong> Cashier's Office</p>
+                            <p style="color: #155724; margin: 5px 0;"><strong>2. Office Hours:</strong> Monday-Friday, 8:00 AM - 5:00 PM</p>
+                            <p style="color: #155724; margin: 5px 0;"><strong>3. Required:</strong> Present this reference number: <strong>{reference_number}</strong></p>
+                            <p style="color: #155724; margin: 5px 0;"><strong>4. Payment:</strong> Exact amount of ₱{amount:.2f}</p>
+                        </div>
+                        
+                        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <h4 style="color: #856404; margin-top: 0;">Important Notes:</h4>
+                            <p style="color: #856404; margin: 5px 0;">• Please pay within 3 working days to avoid cancellation</p>
+                            <p style="color: #856404; margin: 5px 0;">• Keep this reference number for your records</p>
+                            <p style="color: #856404; margin: 5px 0;">• Your document will be processed after payment confirmation</p>
+                        </div>
+                        
+                        <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <h4 style="color: #0c5460; margin-top: 0;">Next Steps:</h4>
+                            <p style="color: #0c5460; margin: 5px 0;">After payment, your document request will be processed</p>
+                            <p style="color: #0c5460; margin: 5px 0;">You will receive another email when your document is ready</p>
+                        </div>
+                        
+                        <hr style="margin: 30px 0;">
+                        <p style="color: #666; font-size: 12px;">
+                            This is an automated message. Please do not reply to this email.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            if has_email_service:
+                # Send email using email service
+                success = email_service._send_email(student_email, subject, body)
+                if success:
+                    print(f"✅ Cash payment email sent to {student_email}")
+                    return True
+                else:
+                    print(f"❌ Failed to send cash payment email to {student_email}")
+                    # Fall through to fallback method
+                    
+            # Fallback: Print email details
+            print("=" * 60)
+            print("📧 CASH PAYMENT EMAIL (FALLBACK)")
+            print("=" * 60)
+            print(f"To: {student_email}")
+            print(f"Subject: {subject}")
+            print(f"Body:\n{body}")
+            print("=" * 60)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error in cash payment email: {e}")
+            return False
 
     def _relative_to_assets(self, path: str):
         """Get path to assets"""

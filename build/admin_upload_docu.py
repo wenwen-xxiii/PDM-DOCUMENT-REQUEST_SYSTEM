@@ -28,9 +28,10 @@ def relative_to_assets(path: str) -> Path:
     return Path(resource_path(f"resources/assets/adminuploaddoc/{path}"))
 
 class AdminUploadDocumentWindow:
-    def __init__(self, parent, request_data=None):
+    def __init__(self, parent, request_data=None, refresh_callback=None):
         self.parent = parent
         self.request_data = request_data
+        self.refresh_callback = refresh_callback 
         self.selected_file_path = None
         self.document_types = []
         
@@ -595,6 +596,10 @@ Document uploaded successfully!
 
             messagebox.showinfo("Success", success_msg)
             
+            # Call refresh callback if provided
+            if self.refresh_callback:
+                self.refresh_callback()
+                
             self.go_back()
                 
         except mysql.connector.Error as e:

@@ -266,8 +266,8 @@ class DocumentRequestSystem:
         # Clear any pending operations
         self.root.after_cancel('all')
         
-        self.root.state('normal')  # Ensure window is in normal state
-        self.root.attributes('-fullscreen', False)  # Exit fullscreen state
+        self.root.state('normal') 
+        self.root.attributes('-fullscreen', False) 
     
         # Force window update
         self.root.update_idletasks()
