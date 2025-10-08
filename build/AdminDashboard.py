@@ -1,10 +1,11 @@
 # admindashboard.py
 from pathlib import Path
-from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, Frame, messagebox
+from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, Frame, messagebox, Label
 import mysql.connector
 from mysql.connector import Error
 import sys
 import os
+from admin_request import AdminRequestManager
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,6 +42,10 @@ class AdminDashboard:
             'pending_requests': 0,
             'total_feedback': 0
         }
+        
+        # Content management
+        self.current_content = "dashboard"
+        self.content_frame = None
         
         self.setup_ui()
         self.load_statistics()
@@ -103,7 +108,13 @@ class AdminDashboard:
         self.canvas.create_image(77.0, 218.0, image=image_profile_pic)
 
         # Main content area
-        self.canvas.create_rectangle(326.0, 179.0, 1221.0, 753.0, fill="#FFFFFF", outline="")
+        image_image_5 = PhotoImage(file=relative_to_assets("image_content.png"))
+        self.images.append(image_image_5)
+        self.image_content = self.canvas.create_image(
+            773.0,
+            466.0,
+            image=image_image_5
+        )
 
         # Admin info
         admin_name = f"{self.user_data.get('first_name', 'Admin')} {self.user_data.get('last_name', 'User')}"
@@ -113,7 +124,7 @@ class AdminDashboard:
                                fill="#F2F2F2", font=("Inter", 16 * -1))
 
         # Dashboard title
-        self.canvas.create_text(351.0, 202.0, anchor="nw", text="Dashboard",
+        self.title_text = self.canvas.create_text(351.0, 202.0, anchor="nw", text="Dashboard",
                                fill="#303030", font=("Inter SemiBold", 24 * -1))
 
         # Create navigation buttons
@@ -121,6 +132,36 @@ class AdminDashboard:
         
         # Create dashboard panels
         self.create_dashboard_panels()
+        
+        # Add text-based logout button in header
+        self.create_header_logout_button()
+        
+        # Create content frame
+        self.create_content_frame()
+        
+    def create_content_frame(self):
+        """Create the main content frame where all content will be displayed"""
+        self.content_frame = Frame(
+            self.parent,
+            bg="#FFFFFF",
+            bd=0,
+            highlightthickness=0
+        )
+        self.content_frame.place(x=326.0, y=179.0, width=895.0, height=574.0)
+        
+    def create_header_logout_button(self):
+        """Create text-based logout button in header"""
+        self.button_logout = Button(
+            self.parent,
+            text="Logout",
+            font=("Inter", 12),
+            bg="#792D1B",
+            fg="#FFDA0C",
+            relief="flat",
+            cursor="hand2",
+            command=self.logout
+        )
+        self.button_logout.place(relx=0.95, rely=0.03, anchor="ne")
         
     def create_navigation_buttons(self):
         """Create navigation buttons"""
@@ -266,82 +307,224 @@ class AdminDashboard:
                                                   fill="#FFFFFF", font=("Inter", 24 * -1, "bold"))
 
     def load_statistics(self):
-        """Load statistics from database"""
+        """Load statistics from database - FIXED VERSION"""
         try:
             connection = self.get_db_connection()
             if not connection:
+                print("❌ No database connection available")
                 return
                 
             cursor = connection.cursor(dictionary=True)
             
-            # Total students
-            cursor.execute("SELECT COUNT(*) as total FROM students WHERE is_active = TRUE")
+            # Total students - FIXED: Use enrollment_status instead of is_active
+            cursor.execute("SELECT COUNT(*) as total FROM students WHERE enrollment_status = 'Enrolled'")
             result = cursor.fetchone()
             self.stats_data['total_students'] = result['total'] if result else 0
+            print(f"✅ Total students: {self.stats_data['total_students']}")
             
             # Total requests
             cursor.execute("SELECT COUNT(*) as total FROM document_requests")
             result = cursor.fetchone()
             self.stats_data['total_requests'] = result['total'] if result else 0
+            print(f"✅ Total requests: {self.stats_data['total_requests']}")
             
-            # Pending requests
-            cursor.execute("SELECT COUNT(*) as total FROM document_requests WHERE status = 'submitted'")
+            # Pending requests - FIXED: Use correct status values from your schema
+            cursor.execute("""
+                SELECT COUNT(*) as total FROM document_requests 
+                WHERE status IN ('under_review', 'payment_pending', 'processing')
+            """)
             result = cursor.fetchone()
             self.stats_data['pending_requests'] = result['total'] if result else 0
+            print(f"✅ Pending requests: {self.stats_data['pending_requests']}")
             
-            # Total feedback (if you have a feedback table)
+            # Total feedback
             cursor.execute("SELECT COUNT(*) as total FROM feedback")
             result = cursor.fetchone()
             self.stats_data['total_feedback'] = result['total'] if result else 0
+            print(f"✅ Total feedback: {self.stats_data['total_feedback']}")
             
             cursor.close()
             connection.close()
             
+            print("✅ Statistics loaded successfully")
+            
         except Error as e:
-            print(f"Error loading statistics: {e}")
+            print(f"❌ Error loading statistics: {e}")
             # Use default values if database error occurs
+            self.stats_data = {
+                'total_students': 0,
+                'total_requests': 0,
+                'pending_requests': 0,
+                'total_feedback': 0
+            }
 
     def update_display(self):
         """Update the display with current statistics"""
-        self.canvas.itemconfig(self.students_text, text=str(self.stats_data['total_students']))
-        self.canvas.itemconfig(self.requests_text, text=str(self.stats_data['total_requests']))
-        self.canvas.itemconfig(self.feedback_text, text=str(self.stats_data['total_feedback']))
-        self.canvas.itemconfig(self.pending_text, text=str(self.stats_data['pending_requests']))
+        try:
+            self.canvas.itemconfig(self.students_text, text=str(self.stats_data['total_students']))
+            self.canvas.itemconfig(self.requests_text, text=str(self.stats_data['total_requests']))
+            self.canvas.itemconfig(self.feedback_text, text=str(self.stats_data['total_feedback']))
+            self.canvas.itemconfig(self.pending_text, text=str(self.stats_data['pending_requests']))
+            print("✅ Display updated with statistics")
+        except Exception as e:
+            print(f"❌ Error updating display: {e}")
+
+    def clear_content(self):
+        """Clear the content frame"""
+        if self.content_frame:
+            for widget in self.content_frame.winfo_children():
+                try:
+                    widget.destroy()
+                except:
+                    pass
+
+    def show_dashboard_content(self):
+        """Show dashboard content in the content frame"""
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Dashboard")
+        
+        # Show statistics panels
+        self.canvas.itemconfig(self.students_text, state="normal")
+        self.canvas.itemconfig(self.requests_text, state="normal")
+        self.canvas.itemconfig(self.feedback_text, state="normal")
+        self.canvas.itemconfig(self.pending_text, state="normal")
+        
+        # Load fresh statistics
+        self.load_statistics()
+        self.update_display()
+
+    def show_requests_content(self):
+        """Show requests management content in the content frame"""
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Requests")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
+        # Create requests management interface
+        self.create_requests_interface()
+
+    def create_requests_interface(self):
+        """Create the requests management interface inside content frame"""
+        try:
+            # Create requests manager inside the content frame
+            self.requests_manager = AdminRequestManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ Requests interface loaded successfully")
+        except Exception as e:
+            print(f"❌ Error creating requests interface: {e}")
+            messagebox.showerror("Error", f"Failed to load requests interface: {str(e)}")
 
     # Navigation methods
     def show_dashboard(self):
-        """Show dashboard (refresh statistics)"""
-        self.load_statistics()
-        self.update_display()
-        messagebox.showinfo("Dashboard", "Dashboard refreshed!")
+        """Show dashboard"""
+        print("🔄 Showing dashboard...")
+        self.current_content = "dashboard"
+        self.show_dashboard_content()
 
     def show_students(self):
         """Show students management"""
-        messagebox.showinfo("Students", "Student management feature coming soon!")
+        self.current_content = "students"
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Students Management")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
+        # Add students management content here
+        label = Label(self.content_frame, text="Students Management - Coming Soon", 
+                     bg="#FFFFFF", font=("Inter", 16), fg="#666666")
+        label.pack(expand=True, fill="both")
 
     def show_documents(self):
         """Show document types management"""
+        self.current_content = "documents"
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Document Types")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
         messagebox.showinfo("Documents", "Document types management feature coming soon!")
 
     def show_requests(self):
         """Show document requests management"""
-        messagebox.showinfo("Requests", "Document requests management feature coming soon!")
+        print("🔄 Showing requests management...")
+        self.current_content = "requests"
+        self.show_requests_content()
 
     def show_billing(self):
         """Show billing and payments"""
+        self.current_content = "billing"
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Billing & Payments")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
         messagebox.showinfo("Billing", "Billing and payments feature coming soon!")
 
     def show_feedback(self):
         """Show feedback management"""
+        self.current_content = "feedback"
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="Feedback Management")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
         messagebox.showinfo("Feedback", "Feedback management feature coming soon!")
 
     def show_users(self):
         """Show user management"""
+        self.current_content = "users"
+        self.clear_content()
+        
+        # Update title
+        self.canvas.itemconfig(self.title_text, text="User Management")
+        
+        # Hide dashboard statistics
+        self.canvas.itemconfig(self.students_text, state="hidden")
+        self.canvas.itemconfig(self.requests_text, state="hidden")
+        self.canvas.itemconfig(self.feedback_text, state="hidden")
+        self.canvas.itemconfig(self.pending_text, state="hidden")
+        
         messagebox.showinfo("Users", "User management feature coming soon!")
 
     def logout(self):
         """Logout admin"""
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            print("🚪 Logging out admin...")
             if self.logout_callback:
                 self.logout_callback()
 

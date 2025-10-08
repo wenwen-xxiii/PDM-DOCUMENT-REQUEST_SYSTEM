@@ -7,6 +7,10 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from email.mime.base import MIMEBase
+from email import encoders
+import io
 from config import APP_CONFIG, EMAIL_CONFIG
 
 class UtilityFunctions:
@@ -162,6 +166,129 @@ class EmailService:
         except Exception as e:
             print(f"❌ Email sending error: {e}")
             return False
+
+    def send_email_with_attachments(self, to_email, subject, body, attachments_data):
+        """Send email with attachments from database BLOB data"""
+        try:
+            if not self.email_enabled:
+                return self._fallback_attachment_email(to_email, subject, body, attachments_data)
+            
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = f"PDM Document System <{self.email_address}>"
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            # Add HTML body
+            msg.attach(MIMEText(body, 'html'))
+            
+            # Add attachments from database BLOB data
+            for attachment in attachments_data:
+                file_name = attachment['file_name']
+                file_data = attachment['file_data']  # This is the BLOB from database
+                file_type = attachment.get('file_type', 'application/pdf')
+                
+                if file_data:
+                    # Determine MIME type
+                    maintype, subtype = file_type.split('/', 1) if '/' in file_type else ('application', 'octet-stream')
+                    
+                    # Create attachment
+                    part = MIMEBase(maintype, subtype)
+                    part.set_payload(file_data)
+                    encoders.encode_base64(part)
+                    part.add_header(
+                        'Content-Disposition',
+                        f'attachment; filename="{file_name}"'
+                    )
+                    msg.attach(part)
+            
+            # Connect to SMTP server and send
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.email_address, self.email_password)
+                server.send_message(msg)
+            
+            print(f"✓ Email with attachments sent to: {to_email}")
+            return True
+            
+        except smtplib.SMTPAuthenticationError:
+            print("❌ SMTP Authentication failed. Check email credentials.")
+            return False
+        except smtplib.SMTPException as e:
+            print(f"❌ SMTP error: {e}")
+            return self._fallback_attachment_email(to_email, subject, body, attachments_data)
+        except Exception as e:
+            print(f"❌ Email with attachments error: {e}")
+            return self._fallback_attachment_email(to_email, subject, body, attachments_data)
+    
+    def send_document_ready_email(self, to_email, request_details, db_connection):
+        """Send email when document is ready with attachments"""
+        try:
+            # Get attachments from database
+            cursor = db_connection.cursor()
+            cursor.execute("""
+                SELECT file_name, file_data, file_type 
+                FROM document_attachments 
+                WHERE request_id = %s
+            """, (request_details.get('request_id'),))
+            
+            attachments = cursor.fetchall()
+            cursor.close()
+            
+            # Prepare attachments data
+            attachments_data = []
+            for file_name, file_data, file_type in attachments:
+                if file_data:  # Only include if BLOB data exists
+                    attachments_data.append({
+                        'file_name': file_name,
+                        'file_data': file_data,
+                        'file_type': file_type or 'application/pdf'
+                    })
+            
+            subject = f"Request Completed - #{request_details.get('request_number', '')}"
+            body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                    </div>
+                    
+                    <div style="padding: 30px;">
+                        <h2 style="color: #800000;">Request Completed</h2>
+                        <p>Dear {request_details.get('student_name', 'Student')},</p>
+                        
+                        <p>Your document request <strong>#{request_details.get('request_number', '')}</strong> has been completed.</p>
+                        
+                        <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Request Details:</h3>
+                            <p><strong>Document:</strong> {request_details.get('document_name', 'N/A')}</p>
+                            <p><strong>Delivery Method:</strong> {request_details.get('delivery_method', 'Email').title()}</p>
+                            <p><strong>Completed Date:</strong> {request_details.get('completed_date', 'N/A')}</p>
+                        </div>
+                        
+                        <p>Your document has been delivered to your email. Please check your inbox and spam folder.</p>
+                        
+                        <hr style="margin: 30px 0;">
+                        <p style="color: #666; font-size: 12px;">
+                            This is an automated message. Please do not reply to this email.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            if attachments_data:
+                return self.send_email_with_attachments(to_email, subject, body, attachments_data)
+            else:
+                # Fallback to regular email if no attachments
+                return self._send_email(to_email, subject, body)
+                
+        except Exception as e:
+            print(f"❌ Document ready email error: {e}")
+            return False
     
     def send_request_confirmation(self, to_email, request_details):
         """Send document request confirmation email"""
@@ -242,6 +369,21 @@ class EmailService:
         print(f"Reference: {request_details.get('reference_number', 'N/A')}")
         print("=" * 50)
         return True
+    
+    def _fallback_attachment_email(self, to_email, subject, body, attachments_data):
+        """Fallback for email with attachments"""
+        print("=" * 60)
+        print("📧 EMAIL WITH ATTACHMENTS (FALLBACK)")
+        print("=" * 60)
+        print(f"To: {to_email}")
+        print(f"Subject: {subject}")
+        print(f"Attachments: {[att['file_name'] for att in attachments_data]}")
+        print(f"Body: {body[:100]}...")  # First 100 chars of body
+        print("=" * 60)
+        print("✅ Email with attachments would be sent to", to_email)
+        print("=" * 60)
+        return True
+
 
 class PaymentProcessor:
     @staticmethod
@@ -255,6 +397,7 @@ class PaymentProcessor:
             'transaction_id': f"TXN{reference_number}",
             'message': 'Payment processed successfully (Simulation Mode)'
         }
+
 
 class ValidationHelper:
     @staticmethod
@@ -279,13 +422,43 @@ class ValidationHelper:
         """Validate payment status for a request"""
         try:
             cursor = db_connection.cursor()
-            cursor.execute("SELECT payment_status FROM document_requests WHERE id = %s", (request_id,))
+            cursor.execute("SELECT payment_status FROM document_requests WHERE request_id = %s", (request_id,))
             result = cursor.fetchone()
             return result[0] if result else None
         except Exception as e:
             print(f"Error validating payment: {e}")
             return None
 
+
+class DocumentGenerator:
+    @staticmethod
+    def generate_certificate_of_enrollment(student_data, request_data):
+        """Generate Certificate of Enrollment PDF"""
+        # This would generate the actual PDF document
+        # For now, return a simulated PDF content
+        pdf_content = f"""
+        CERTIFICATE OF ENROLLMENT
+        PAMBAYANG DALUBHASAAN NG MARILAO
+        
+        This is to certify that {student_data['first_name']} {student_data['last_name']}
+        with Student Number {student_data['student_number']}
+        is currently enrolled in {student_data['course']}
+        for the {student_data['year_level']} for Academic Year 2024-2025.
+        
+        Request Number: {request_data['request_number']}
+        Date Issued: {datetime.now().strftime('%Y-%m-%d')}
+        
+        Registrar's Office
+        Pambayang Dalubhasaan ng Marilao
+        """
+        
+        # In a real implementation, you would use a PDF generation library
+        # like reportlab, weasyprint, or pdfkit here
+        return pdf_content.encode('utf-8')
+
+
 # Global utility instances
 email_service = EmailService()
 payment_processor = PaymentProcessor()
+validation_helper = ValidationHelper()
+document_generator = DocumentGenerator()

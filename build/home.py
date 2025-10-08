@@ -70,7 +70,7 @@ class HomeWindow:
         self.button_profile.place(x=button_spacing * 4 - 40, y=nav_y, width=80, height=24)
         
         # Update user interface button positions
-        self.button_logout.place(relx=0.97, rely=0.03, anchor="n")
+        self.button_logout.place(relx=0.95, rely=0.03, anchor="n")
         
         # Update university text positions
         self.canvas.coords("university_text", 128, 24)

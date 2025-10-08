@@ -15,18 +15,20 @@ class DatabaseInitializer:
                 user=DB_CONFIG['user'],
                 password=DB_CONFIG['password']
             )
+            print("✓ Connected to MySQL server successfully")
             return True
         except Error as e:
             print(f"❌ Error connecting to MySQL: {e}")
+            print("💡 Please check your MySQL server is running and credentials in config.py are correct")
             return False
     
     def create_database(self):
         """Create database if it doesn't exist"""
         try:
             cursor = self.connection.cursor()
-            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_CONFIG['database']}")
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_CONFIG['database']} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
             cursor.execute(f"USE {DB_CONFIG['database']}")
-            print("✓ Database created/verified successfully")
+            print(f"✓ Database '{DB_CONFIG['database']}' created/verified successfully")
             return True
         except Error as e:
             print(f"❌ Error creating database: {e}")
@@ -125,7 +127,7 @@ class DatabaseInitializer:
                     delivery_mode ENUM('pickup', 'online') DEFAULT 'pickup',
                     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     request_release_date DATE,
-                    status ENUM('under_review', 'payment_pending', 'processing', 'ready_for_pickup', 'completed', 'cancelled', 'rejected') DEFAULT 'payment_pending',
+                    status ENUM('payment_pending', 'processing', 'ready_for_pickup', 'completed', 'cancelled', 'rejected') DEFAULT 'payment_pending',
                     rejection_reason TEXT,
                     total_amount DECIMAL(10,2) DEFAULT 0.00,
                     payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',
@@ -139,6 +141,22 @@ class DatabaseInitializer:
                     FOREIGN KEY (student_id) REFERENCES students(student_id),
                     FOREIGN KEY (document_type_id) REFERENCES document_types(document_type_id),
                     FOREIGN KEY (processed_by) REFERENCES staff(staff_id)
+                )
+            """)
+            
+            # Document Attachments table (for file uploads)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS document_attachments (
+                    attachment_id INT AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    file_name VARCHAR(255) NOT NULL,
+                    file_data LONGBLOB NOT NULL,
+                    file_size INT NOT NULL,
+                    file_type VARCHAR(100),
+                    uploaded_by VARCHAR(100) NOT NULL,
+                    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    remarks TEXT,
+                    FOREIGN KEY (request_id) REFERENCES document_requests(request_id) ON DELETE CASCADE
                 )
             """)
             
@@ -263,12 +281,21 @@ class DatabaseInitializer:
             """)
             
             # Create indexes for better performance
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_student ON document_requests(student_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_status ON document_requests(status)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_requests_date ON document_requests(request_date)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_number ON students(student_number)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_document_types_available ON document_types(is_available)")
+            indexes = [
+                "CREATE INDEX IF NOT EXISTS idx_document_requests_student ON document_requests(student_id)",
+                "CREATE INDEX IF NOT EXISTS idx_document_requests_status ON document_requests(status)",
+                "CREATE INDEX IF NOT EXISTS idx_document_requests_date ON document_requests(request_date)",
+                "CREATE INDEX IF NOT EXISTS idx_document_attachments_request ON document_attachments(request_id)",
+                "CREATE INDEX IF NOT EXISTS idx_document_attachments_date ON document_attachments(upload_date)",
+                "CREATE INDEX IF NOT EXISTS idx_students_number ON students(student_number)",
+                "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+                "CREATE INDEX IF NOT EXISTS idx_document_types_available ON document_types(is_available)",
+                "CREATE INDEX IF NOT EXISTS idx_students_user ON students(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_staff_user ON staff(user_id)"
+            ]
+            
+            for index_sql in indexes:
+                cursor.execute(index_sql)
             
             print("✓ All tables created successfully with consistent naming")
             return True
@@ -276,34 +303,40 @@ class DatabaseInitializer:
             print(f"❌ Error creating tables: {e}")
             return False
     
+    def get_or_create_user_id(self, cursor, username, email, password, user_type='student'):
+        """Get existing user ID or create new user"""
+        try:
+            # Check if user exists
+            cursor.execute("SELECT user_id FROM users WHERE username = %s OR email = %s", (username, email))
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]  # Return existing user ID
+            
+            # Create new user
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, user_type, is_verified) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, (username, email, password_hash, user_type, True))
+            
+            return cursor.lastrowid
+        except Error as e:
+            print(f"❌ Error in get_or_create_user_id: {e}")
+            return None
+    
     def insert_initial_data(self):
         """Insert initial data into tables with consistent naming"""
         try:
             cursor = self.connection.cursor()
             
-            # Create default admin user account
-            admin_password = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute("""
-                INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('admin', 'admin@pdm.edu.ph', admin_password, 'admin', True))
-            admin_user_id = cursor.lastrowid if cursor.lastrowid else 1
+            # Create default users and get their IDs
+            admin_user_id = self.get_or_create_user_id(cursor, 'admin', 'admin@pdm.edu.ph', 'admin123', 'admin')
+            registrar_user_id = self.get_or_create_user_id(cursor, 'registrar', 'registrar@pdm.edu.ph', 'registrar123', 'registrar')
+            student_user_id = self.get_or_create_user_id(cursor, 'PDM-2023-003139', 'wenwenxiii@gmail.com', 'student123', 'student')
             
-            # Create default registrar user account
-            registrar_password = hashlib.sha256('registrar123'.encode()).hexdigest()
-            cursor.execute("""
-                INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('registrar', 'registrar@pdm.edu.ph', registrar_password, 'registrar', True))
-            registrar_user_id = cursor.lastrowid if cursor.lastrowid else 2
-            
-            # Create student user account
-            student_password = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute("""
-                INSERT IGNORE INTO users (username, email, password_hash, user_type, is_verified) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('PDM-2023-003139', 'wenwenxiii@gmail.com', student_password, 'student', True))
-            student_user_id = cursor.lastrowid if cursor.lastrowid else 3
+            if not all([admin_user_id, registrar_user_id, student_user_id]):
+                raise Exception("Failed to create user accounts")
             
             # Create admin staff record
             cursor.execute("""
@@ -336,17 +369,39 @@ class DatabaseInitializer:
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, [(code, name, desc, fee, days, clearance, admin_user_id) for code, name, desc, fee, days, clearance in document_types])
             
-            # Insert sample student records
-            student_records = [
-                # Wendell Rebusit (with user_id 3)
-                (3, 'PDM-2023-003139', 'Wendell', 'Rebusit', 'Fernandez', '1998-09-23', 'Male', 'BS Information Technology', '3rd Year', '09270786707', 'Iloilo City', 'Enrolled', '2023-06-01', False, None),
-                # Other sample students (without user_id)
-                (None, 'PDM-2025-000001', 'Juan', 'Dela Cruz', 'S.', '2003-02-15', 'Male', 'BS Information Technology', '1st Year', '09123456701', 'Marilao, Bulacan', 'Enrolled', '2025-06-01', False, None),
-                (None, 'PDM-2025-000002', 'Maria', 'Santos', 'L.', '2003-05-20', 'Female', 'BS Computer Science', '1st Year', '09123456702', 'Malolos, Bulacan', 'Enrolled', '2025-06-01', False, None),
-                (None, 'PDM-2025-000003', 'Jose', 'Reyes', 'M.', '2003-08-10', 'Male', 'BS Information Systems', '1st Year', '09123456703', 'Plaridel, Bulacan', 'Enrolled', '2025-06-01', False, None),
-                (None, 'PDM-2025-000004', 'Ana', 'Lopez', 'R.', '2003-03-05', 'Female', 'BS Information Technology', '1st Year', '09123456704', 'Hagonoy, Bulacan', 'Enrolled', '2025-06-01', False, None),
-                (None, 'PDM-2025-000005', 'Mark', 'Gonzales', 'T.', '2003-11-12', 'Male', 'BS Computer Science', '1st Year', '09123456705', 'Balagtas, Bulacan', 'Enrolled', '2025-06-01', False, None)
+            # Create user accounts for ALL sample students
+            sample_students_data = [
+                ('PDM-2025-000001', 'Juan', 'Dela Cruz', 'S.', '2003-02-15', 'Male', 'BS Information Technology', '1st Year', '09123456701', 'Marilao, Bulacan', '2025-06-01'),
+                ('PDM-2025-000002', 'Maria', 'Santos', 'L.', '2003-05-20', 'Female', 'BS Computer Science', '1st Year', '09123456702', 'Malolos, Bulacan', '2025-06-01'),
+                ('PDM-2025-000003', 'Jose', 'Reyes', 'M.', '2003-08-10', 'Male', 'BS Information Systems', '1st Year', '09123456703', 'Plaridel, Bulacan', '2025-06-01'),
+                ('PDM-2025-000004', 'Ana', 'Lopez', 'R.', '2003-03-05', 'Female', 'BS Information Technology', '1st Year', '09123456704', 'Hagonoy, Bulacan', '2025-06-01'),
+                ('PDM-2025-000005', 'Mark', 'Gonzales', 'T.', '2003-11-12', 'Male', 'BS Computer Science', '1st Year', '09123456705', 'Balagtas, Bulacan', '2025-06-01')
             ]
+            
+            student_user_ids = [student_user_id]  # Start with the main student
+            
+            # Create user accounts for other sample students
+            for student_data in sample_students_data:
+                student_number = student_data[0]
+                email = f"{student_number.lower()}@pdm.edu.ph"
+                user_id = self.get_or_create_user_id(cursor, student_number, email, 'student123', 'student')
+                if user_id:
+                    student_user_ids.append(user_id)
+            
+            # Insert student records with proper user_ids
+            student_records = [
+                # Wendell Rebusit (with user_id)
+                (student_user_ids[0], 'PDM-2023-003139', 'Wendell', 'Rebusit', 'Fernandez', '1998-09-23', 'Male', 'BS Information Technology', '3rd Year', '09270786707', 'Iloilo City', 'Enrolled', '2023-06-01', False, None),
+            ]
+            
+            # Add other students with their user_ids
+            for i, student_data in enumerate(sample_students_data, 1):
+                if i < len(student_user_ids):
+                    student_records.append((
+                        student_user_ids[i], student_data[0], student_data[1], student_data[2], student_data[3],
+                        student_data[4], student_data[5], student_data[6], student_data[7], student_data[8],
+                        student_data[9], 'Enrolled', student_data[10], False, None
+                    ))
             
             cursor.executemany("""
                 INSERT IGNORE INTO students (
@@ -388,16 +443,13 @@ class DatabaseInitializer:
             print("\n📋 Default Accounts Created:")
             print("👤 Admin Account: admin / admin123")
             print("👤 Registrar Account: registrar / registrar123")
-            print("👤 Student Account: PDM-2023-003139 / admin123")
+            print("👤 Student Account: PDM-2023-003139 / student123")
             print("🏢 Department: Registrar Office")
             
             print("\n🎓 Sample Students Created:")
             print("• Wendell Rebusit (PDM-2023-003139) - BS Information Technology - 3rd Year")
-            print("• Juan Dela Cruz (PDM-2025-000001) - BS Information Technology - 1st Year")
-            print("• Maria Santos (PDM-2025-000002) - BS Computer Science - 1st Year") 
-            print("• Jose Reyes (PDM-2025-000003) - BS Information Systems - 1st Year")
-            print("• Ana Lopez (PDM-2025-000004) - BS Information Technology - 1st Year")
-            print("• Mark Gonzales (PDM-2025-000005) - BS Computer Science - 1st Year")
+            for student_data in sample_students_data:
+                print(f"• {student_data[1]} {student_data[2]} ({student_data[0]}) - {student_data[6]} - {student_data[7]}")
             
             return True
         except Error as e:
@@ -447,11 +499,17 @@ if __name__ == "__main__":
     print("=" * 60)
     
     if initialize_system_database():
-        print("✅ Database setup completed successfully!")
-        print("\nDefault accounts created:")
+        print("\n✅ Database setup completed successfully!")
+        print("\n📋 Default Accounts:")
         print("👤 Admin: admin / admin123")
         print("👤 Registrar: registrar / registrar123")
-        print("👤 Student: PDM-2023-003139 / admin123")
-        print("\nSample students created (6 records)")
+        print("👤 Student: PDM-2023-003139 / student123")
+        print("\n🎓 Sample Students: 6 records created")
+        print("📎 Document Attachments: Table added for file uploads")
+        print("📊 Document Types: 10 document types configured")
     else:
         print("❌ Database setup failed!")
+        print("💡 Please check:")
+        print("   - MySQL server is running")
+        print("   - Database credentials in config.py are correct")
+        print("   - You have sufficient privileges to create databases")

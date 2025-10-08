@@ -308,7 +308,7 @@ class PayMongoProcessor:
                 UPDATE document_requests 
                 SET payment_status = 'paid',
                     payment_date = CURRENT_TIMESTAMP,
-                    status = 'under_review'
+                    status = 'processing'
                 WHERE request_id = %s
             """, (request_id,))
             
@@ -489,7 +489,7 @@ class PayMongoProcessor:
             
             print(f"📋 Updating request: {request_number}")
             print(f"📋 From status: {old_status}, payment: {old_payment_status}")
-            print(f"📋 To status: under_review, payment: paid")
+            print(f"📋 To status: processing, payment: paid")
             
             # Update payments table
             cursor.execute("""
@@ -529,7 +529,7 @@ class PayMongoProcessor:
                 UPDATE document_requests 
                 SET payment_status = 'paid',
                     payment_date = CURRENT_TIMESTAMP,
-                    status = 'under_review'
+                    status = 'processing'
                 WHERE request_id = %s
             """, (request_id,))
             

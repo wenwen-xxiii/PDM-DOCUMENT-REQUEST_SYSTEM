@@ -31,6 +31,7 @@ class ProfileWindow:
         self.navigation_callbacks = navigation_callbacks or {}
         self.is_edit_mode = False
         self.profile_image_data = None
+        self.entry_fullname = None  # Initialize as None
         
         # Create main frame for profile content only (starts below navigation)
         self.main_frame = Frame(self.parent, bg="#FCECB7")
@@ -257,8 +258,8 @@ class ProfileWindow:
             entry_img_name = PhotoImage(file=relative_to_assets("entry_fullname.png"))
             self.entry_img_name = entry_img_name
             self.name_entry_bg = self.canvas.create_image(230.0, 220.0, image=entry_img_name, state="hidden")
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load name entry background: {e}")
 
         # Upload New Profile Button (adjusted y from 194 to 54)
         def upload_new_profile_pic():
@@ -322,7 +323,7 @@ class ProfileWindow:
                 WHERE student_number = %s
             """, (
                 self.profile_image_data,
-                self.user_data['student_number']
+                self.user_data.get('student_number', '')
             ))
 
             connection.commit()
@@ -369,7 +370,8 @@ class ProfileWindow:
             img = Image.open(relative_to_assets("image_profilepic.png"))
             img = img.resize((140, 140), Image.LANCZOS)
             self.profile_pic = ImageTk.PhotoImage(img)
-        except:
+        except Exception as e:
+            print(f"Could not load default profile picture: {e}")
             # Create a default blank image
             img = Image.new('RGB', (140, 140), color='#FFF1C2')
             self.profile_pic = ImageTk.PhotoImage(img)
@@ -386,8 +388,8 @@ class ProfileWindow:
             entry_img_studentno = PhotoImage(file=relative_to_assets("entry_studentno1.png"))
             self.entry_img_studentno = entry_img_studentno
             self.canvas.create_image(230.0, 377.0, image=entry_img_studentno)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load student number entry background: {e}")
         
         self.entry_studentno = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                    relief="flat", bg="#FFF1C2", font=("Inter", 10))
@@ -400,8 +402,8 @@ class ProfileWindow:
             entry_img_email = PhotoImage(file=relative_to_assets("entry_email1.png"))
             self.entry_img_email = entry_img_email
             self.canvas.create_image(230.0, 475.0, image=entry_img_email)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load email entry background: {e}")
         
         self.entry_email = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                relief="flat", bg="#FFF1C2", font=("Inter", 10))
@@ -416,8 +418,8 @@ class ProfileWindow:
             entry_img_contact = PhotoImage(file=relative_to_assets("entry_contactno.png"))
             self.entry_img_contact = entry_img_contact
             self.canvas.create_image(557.0, 128.0, image=entry_img_contact)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load contact number entry background: {e}")
         
         self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                  relief="flat", bg="#FFF1C2", font=("Inter", 10))
@@ -432,8 +434,8 @@ class ProfileWindow:
             entry_img_dob_month = PhotoImage(file=relative_to_assets("entry_bdaymonth.png"))
             self.entry_img_dob_month = entry_img_dob_month
             self.canvas.create_image(740.0, 128.0, image=entry_img_dob_month)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load DOB month entry background: {e}")
 
         self.dob_month = ttk.Combobox(self.main_frame, values=["January","February","March","April","May","June",
             "July","August","September","October","November","December"], 
@@ -444,8 +446,8 @@ class ProfileWindow:
             entry_img_dob_day = PhotoImage(file=relative_to_assets("entry_bdayday.png"))
             self.entry_img_dob_day = entry_img_dob_day
             self.canvas.create_image(830.0, 128.0, image=entry_img_dob_day)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load DOB day entry background: {e}")
 
         self.dob_day = ttk.Combobox(self.main_frame, values=[str(i) for i in range(1, 32)],
                                 state="readonly", style="Custom.TCombobox", width=6)
@@ -455,8 +457,8 @@ class ProfileWindow:
             entry_img_dob_year = PhotoImage(file=relative_to_assets("entry_bdayyear.png"))
             self.entry_img_dob_year = entry_img_dob_year
             self.canvas.create_image(923.0, 128.0, image=entry_img_dob_year)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load DOB year entry background: {e}")
 
         current_year = datetime.datetime.now().year
         self.dob_year = ttk.Combobox(self.main_frame, values=[str(y) for y in range(current_year - 40, current_year + 1)],
@@ -470,8 +472,8 @@ class ProfileWindow:
             entry_img_gender = PhotoImage(file=relative_to_assets("entry_gender.png"))
             self.entry_img_gender = entry_img_gender
             self.canvas.create_image(1093.0, 128.0, image=entry_img_gender)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load gender entry background: {e}")
         
         self.gender = ttk.Combobox(self.main_frame, values=["Male", "Female", "Other"],
                                   state="readonly", style="Custom.TCombobox")
@@ -484,8 +486,8 @@ class ProfileWindow:
             entry_img_address = PhotoImage(file=relative_to_assets("entry_address.png"))
             self.entry_img_address = entry_img_address
             self.canvas.create_image(818.0, 229.0, image=entry_img_address)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load address entry background: {e}")
         
         self.entry_address = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                  relief="flat", bg="#FFF1C2", font=("Inter", 10))
@@ -498,8 +500,8 @@ class ProfileWindow:
             entry_img_course = PhotoImage(file=relative_to_assets("entry_course.png"))
             self.entry_img_course = entry_img_course
             self.canvas.create_image(557.0, 337.0, image=entry_img_course)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load course entry background: {e}")
         
         self.course = ttk.Combobox(self.main_frame, values=[
             "Bachelor of Science in Information Technology", "Bachelor of Science in Computer Science",
@@ -516,8 +518,8 @@ class ProfileWindow:
             entry_img_yearlevel = PhotoImage(file=relative_to_assets("entry_yrlevel.png"))
             self.entry_img_yearlevel = entry_img_yearlevel
             self.canvas.create_image(818.0, 337.0, image=entry_img_yearlevel)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load year level entry background: {e}")
         
         self.year_level = ttk.Combobox(self.main_frame, values=["1st Year", "2nd Year", "3rd Year", "4th Year"],
                                       state="readonly", style="Custom.TCombobox")
@@ -531,8 +533,8 @@ class ProfileWindow:
             entry_img_enrollment = PhotoImage(file=relative_to_assets("entry_enrollmentstatus.png"))
             self.entry_img_enrollment = entry_img_enrollment
             self.canvas.create_image(1079.0, 337.0, image=entry_img_enrollment)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load enrollment status entry background: {e}")
         
         self.enrollment_status = ttk.Combobox(self.main_frame, values=["Enrolled", "Inactive", "Graduated", "Transferred"],
                                             state="readonly", style="Custom.TCombobox")
@@ -545,8 +547,8 @@ class ProfileWindow:
             entry_img_obligations = PhotoImage(file=relative_to_assets("entry_obligations.png"))
             self.entry_img_obligations = entry_img_obligations
             self.canvas.create_image(818.0, 500.0, image=entry_img_obligations)
-        except:
-            pass
+        except Exception as e:
+            print(f"Could not load obligations entry background: {e}")
         
         self.entry_obligations = Text(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                     relief="flat", bg="#FFF1C2", font=("Inter", 10),
@@ -621,7 +623,7 @@ class ProfileWindow:
             self.canvas.itemconfig(self.name_entry_bg, state="normal")
             
             # Create the entry field only when needed (during edit mode)
-            if not hasattr(self, 'entry_fullname') or self.entry_fullname is None:
+            if self.entry_fullname is None:
                 self.entry_fullname = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                           relief="flat", bg="#FFF1C2", font=("Inter", 14),
                                           justify="center")
@@ -634,7 +636,7 @@ class ProfileWindow:
             self.entry_fullname.place(x=120.0, y=202.0, width=220.0, height=38.0)
         else:
             # Hide the entry field and show the name display text
-            if hasattr(self, 'entry_fullname') and self.entry_fullname:
+            if self.entry_fullname is not None:
                 self.entry_fullname.place_forget()
                 # Destroy the entry widget to completely remove it
                 self.entry_fullname.destroy()
@@ -915,7 +917,7 @@ class ProfileWindow:
             entry.delete(0, 'end')
         
         # Only clear the name entry if it exists
-        if hasattr(self, 'entry_fullname') and self.entry_fullname:
+        if self.entry_fullname is not None:
             self.entry_fullname.delete(0, 'end')
         
         for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 

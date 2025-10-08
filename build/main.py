@@ -7,7 +7,7 @@ from login import LoginWindow
 from signup import SignupWindow
 from forgotpass import ForgotPasswordWindow
 from home import HomeWindow
-from admindashboard import AdminDashboard  # Add this import
+from admindashboard import AdminDashboard
 from config import DB_CONFIG, APP_CONFIG
 import os, sys
 import time

@@ -338,7 +338,7 @@ class PaymentWindow:
                 UPDATE document_requests 
                 SET payment_status = 'pending', 
                     payment_method = 'cash',
-                    status = 'under_review'
+                    status = 'processing'
                 WHERE request_id = %s
             """, (self.request_data['request_id'],))
             

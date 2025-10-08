@@ -35,38 +35,63 @@ class DocumentWindow:
         self._setup_ui()
         self.load_document_requests()
         self.update_display()
-        # No more polling - webhooks handle real-time updates
 
     def _get_student_id(self):
         """Get student_id from user_data - FIXED VERSION"""
         print(f"🔍 DEBUG: Getting student_id from user_data: {self.user_data}")
         
         # Method 1: Try to get student_id directly from user_data
-        student_id = self.user_data.get('user_id')
+        student_id = self.user_data.get('student_id')
         if student_id:
-            print(f"✅ Found student_id from user_data['user_id']: {student_id}")
+            print(f"✅ Found student_id from user_data['student_id']: {student_id}")
             return student_id
         
-        # Method 2: Try to get from student_number lookup
+        # Method 2: Try to get from user_id lookup
+        user_id = self.user_data.get('user_id')
+        if user_id:
+            print(f"🔍 Looking up student_id from user_id: {user_id}")
+            looked_up_id = self._get_student_id_from_user_id(user_id)
+            if looked_up_id:
+                print(f"✅ Found student_id from user_id lookup: {looked_up_id}")
+                return looked_up_id
+        
+        # Method 3: Try to get from student_number lookup
         student_number = self.user_data.get('student_number')
         if student_number:
             print(f"🔍 Looking up student_id from student_number: {student_number}")
             looked_up_id = self._get_student_id_from_number(student_number)
             if looked_up_id:
-                print(f"✅ Found student_id from lookup: {looked_up_id}")
+                print(f"✅ Found student_id from student_number lookup: {looked_up_id}")
                 return looked_up_id
-        
-        # Method 3: Check if there's a student_id in a different key
-        for key, value in self.user_data.items():
-            if 'student' in key.lower() and 'id' in key.lower() and value:
-                print(f"✅ Found student_id from key '{key}': {value}")
-                return value
         
         print(f"❌ ERROR: Could not find student_id in user_data: {self.user_data}")
         return None
 
+    def _get_student_id_from_user_id(self, user_id):
+        """Get student_id from user_id"""
+        try:
+            if self.get_db_connection:
+                connection = self.get_db_connection()
+                cursor = connection.cursor()
+                cursor.execute("SELECT student_id FROM students WHERE user_id = %s", (user_id,))
+                result = cursor.fetchone()
+                cursor.close()
+                connection.close()
+                
+                if result:
+                    student_id = result[0]
+                    print(f"✅ Database lookup successful: user_id {user_id} -> student_id {student_id}")
+                    return student_id
+                else:
+                    print(f"❌ No student found with user_id: {user_id}")
+            else:
+                print("❌ No database connection available")
+        except Exception as e:
+            print(f"❌ Error getting student_id from user_id: {e}")
+        return None
+
     def _get_student_id_from_number(self, student_number):
-        """Get student_id from student_number - FIXED VERSION"""
+        """Get student_id from student_number"""
         try:
             if self.get_db_connection:
                 connection = self.get_db_connection()
@@ -122,7 +147,7 @@ class DocumentWindow:
         """Create header section"""
         header_img = PhotoImage(file=self._relative_to_assets("img_headergrid.png"))
         self.images.append(header_img)
-        self.header_bg_id = self.canvas.create_image(635.0, 125.5, image=header_img)
+        self.canvas.create_image(635.0, 125.5, image=header_img)
 
         header_labels = [
             (117.0, "Request Number"),
@@ -311,8 +336,12 @@ class DocumentWindow:
         """Load document requests from database - FIXED VERSION"""
         try:
             print(f"🔍 DEBUG: Loading document requests for student_id: {self.student_id}")
-            print(f"🔍 DEBUG: Current user_data: {self.user_data}")
             
+            if not self.student_id:
+                print("❌ ERROR: No student_id available")
+                self.document_requests = []
+                return
+                
             connection = self.get_db_connection()
             cursor = connection.cursor(dictionary=True)
             
@@ -333,7 +362,7 @@ class DocumentWindow:
                     dr.status,
                     dr.payment_status,
                     dr.payment_intent_id,
-                    dr.student_id  # Add this to debug
+                    dr.student_id
                 FROM document_requests dr
                 JOIN document_types dt ON dr.document_type_id = dt.document_type_id
                 WHERE dr.student_id = %s
@@ -352,6 +381,9 @@ class DocumentWindow:
         except mysql.connector.Error as e:
             print(f"❌ Database Error loading document requests: {str(e)}")
             messagebox.showerror("Database Error", f"Failed to load document requests: {str(e)}")
+            self.document_requests = []
+        except Exception as e:
+            print(f"❌ Unexpected error loading document requests: {str(e)}")
             self.document_requests = []
 
     def update_display(self):
@@ -453,7 +485,7 @@ class DocumentWindow:
             ('docu_copy', str(request['quantity'])),
             ('amount_pay', f"₱{request['total_amount']:.2f}"),
             ('delivery_type', delivery_type),
-            ('docu_status', display_status)  # Use the modified status
+            ('docu_status', display_status)
         ]
         
         for field_name, value in data_mapping:
@@ -474,25 +506,15 @@ class DocumentWindow:
         
         # Show payment button ONLY when payment is pending and status allows payment
         if (status == 'payment_pending' and payment_status == 'pending'):
-            self.payment_buttons[row_index].config(state="normal")  # Ensure it's enabled
+            self.payment_buttons[row_index].config(state="normal")
             self.payment_buttons[row_index].place(x=1089.0, y=button_y_positions[row_index], width=96.0, height=40.0)
-            print(f"🟢 Showing payment button for {request['request_number']}")
         # Show view document button when request is completed
         elif status == 'completed':
             self.view_docu_buttons[row_index].place(x=1089.0, y=button_y_positions[row_index], width=96.0, height=40.0)
-            print(f"🔵 Showing view button for {request['request_number']}")
-        # For under_review, processing, and other statuses - show disabled payment button
-        elif status in ['under_review', 'processing'] or (payment_status == 'paid' and status == 'payment_pending'):
-            # Show disabled payment button for under_review, processing, and payment completed but status pending
-            self.payment_buttons[row_index].config(
-                state="disabled",
-                cursor="arrow"
-            )
+        # For processing, and other statuses - show disabled payment button
+        elif status in ['processing'] or (payment_status == 'paid' and status == 'payment_pending'):
+            self.payment_buttons[row_index].config(state="disabled")
             self.payment_buttons[row_index].place(x=1089.0, y=button_y_positions[row_index], width=96.0, height=40.0)
-            print(f"🟡 Showing disabled payment button for {request['request_number']} - Status: {status}, Payment: {payment_status}")
-        else:
-            # Hide both buttons for other statuses
-            print(f"⚫ Hiding buttons for {request['request_number']} - Status: {status}, Payment: {payment_status}")
 
     def _show_no_records_message(self):
         """Show message when no records exist"""
@@ -584,21 +606,15 @@ class DocumentWindow:
             self.update_display()
 
     def refresh_requests(self):
-        """Refresh the document requests list - called when webhook updates occur"""
-        print("🔄 Refreshing document requests due to webhook update...")
+        """Refresh the document requests list"""
+        print("🔄 Refreshing document requests...")
         self.load_document_requests()
         self.current_page = 1
         self.update_display()
 
-    def handle_payment_webhook_update(self, request_number):
-        """Handle payment updates from webhook - called by external webhook handler"""
-        print(f"🔔 Webhook update received for request: {request_number}")
-        self.refresh_requests()
-
     def destroy(self):
         """Clean up when window is closed"""
         try:
-            # No more polling to cancel
             self.main_frame.destroy()
         except:
             pass
