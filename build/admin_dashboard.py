@@ -6,6 +6,7 @@ from mysql.connector import Error
 import sys
 import os
 from admin_request import AdminRequestManager
+from admin_documents import AdminDocumentManager
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -465,7 +466,17 @@ class AdminDashboard:
         self.canvas.itemconfig(self.feedback_text, state="hidden")
         self.canvas.itemconfig(self.pending_text, state="hidden")
         
-        messagebox.showinfo("Documents", "Document types management feature coming soon!")
+        # Create and show document types manager
+        try:
+            self.document_manager = AdminDocumentManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ Document types manager loaded successfully")
+        except Exception as e:
+            print(f"❌ Error loading document types manager: {e}")
+            messagebox.showerror("Error", f"Failed to load document types manager: {str(e)}")
 
     def show_requests(self):
         """Show document requests management"""
