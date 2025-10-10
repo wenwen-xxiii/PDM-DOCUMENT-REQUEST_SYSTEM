@@ -14,6 +14,7 @@ from admin_user import AdminUserManager
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from build.admin_feedback import AdminFeedbackManager
 from config import DB_CONFIG
 
 OUTPUT_PATH = Path(__file__).parent
@@ -534,7 +535,16 @@ class AdminDashboard:
         self.canvas.itemconfig(self.feedback_text, state="hidden")
         self.canvas.itemconfig(self.pending_text, state="hidden")
         
-        messagebox.showinfo("Feedback", "Feedback management feature coming soon!")
+        try:
+            self.feedback_manager = AdminFeedbackManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ Feedback manager loaded successfully")
+        except Exception as e:
+            print(f"❌ Error loading feedback manager: {e}")
+            messagebox.showerror("Error", f"Failed to load feedback manager: {str(e)}")
 
     def show_users(self):
         """Show user management"""
