@@ -36,6 +36,8 @@ class AdminRequestManager:
         
         # Request data
         self.document_requests = []
+        self.filtered_requests = []
+        self.search_query = ""
         self.current_page = 1
         self.requests_per_page = 10
         
@@ -67,6 +69,9 @@ class AdminRequestManager:
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
+        # Create search bar (top-right)
+        self.create_searchbar()
+
         # Create table header
         self.create_table_headers()
         
@@ -97,6 +102,33 @@ class AdminRequestManager:
                 fill="#FFFFFF", 
                 font=("Inter", 12, "bold")
             )
+
+    def create_searchbar(self):
+        """Create a search entry on the top-right and bind filtering"""
+        # Search entry sized to fit within the right side of header area
+        self.search_entry = Entry(
+            self.parent,
+            bd=1,
+            bg="#FFFFFF",
+            fg="#000716",
+            highlightthickness=1,
+            font=("Inter", 10)
+        )
+        # Place near the top-right inside the content frame, avoiding scrollbar
+        # Content area width ~895; leave room for scrollbar and padding
+        self.search_entry.place(x=640, y=17, width=220, height=24)
+        self.search_entry.insert(0, "Search...")
+        # Simple placeholder behavior
+        def _on_focus_in(event):
+            if self.search_entry.get() == "Search...":
+                self.search_entry.delete(0, "end")
+        def _on_focus_out(event):
+            if not self.search_entry.get().strip():
+                self.search_entry.delete(0, "end")
+                self.search_entry.insert(0, "Search...")
+        self.search_entry.bind("<FocusIn>", _on_focus_in)
+        self.search_entry.bind("<FocusOut>", _on_focus_out)
+        self.search_entry.bind("<KeyRelease>", self.on_search_change)
 
     def create_navigation_controls(self):
         """Create page navigation controls"""
@@ -186,6 +218,8 @@ class AdminRequestManager:
             """)
             
             self.document_requests = cursor.fetchall()
+            # Default filtered list is full list
+            self.filtered_requests = list(self.document_requests)
             
             cursor.close()
             connection.close()
@@ -201,7 +235,7 @@ class AdminRequestManager:
         """Update the display with current page data"""
         self.clear_table_rows()
         
-        if not self.document_requests:
+        if not self.filtered_requests:
             self.show_no_requests_message()
             return
             
@@ -226,10 +260,42 @@ class AdminRequestManager:
         """Display requests for current page"""
         start_idx = (self.current_page - 1) * self.requests_per_page
         end_idx = start_idx + self.requests_per_page
-        current_requests = self.document_requests[start_idx:end_idx]
+        current_requests = self.filtered_requests[start_idx:end_idx]
         
         for i, request in enumerate(current_requests):
             self.create_table_row(i, request)
+
+    def on_search_change(self, event=None):
+        """Handle search text changes and filter the list"""
+        query = self.search_entry.get().strip()
+        # Ignore placeholder
+        if query == "Search...":
+            query = ""
+        self.search_query = query.lower()
+        self.apply_search_filter()
+
+    def apply_search_filter(self):
+        """Filter document_requests into filtered_requests based on search_query"""
+        if not self.search_query:
+            self.filtered_requests = list(self.document_requests)
+        else:
+            q = self.search_query
+            def matches(req):
+                values = [
+                    str(req.get('request_number', '')),
+                    str(req.get('student_name', '')),
+                    str(req.get('student_number', '')),
+                    str(req.get('document_code', '')),
+                    str(req.get('document_name', '')),
+                    str(req.get('status', '')),
+                    str(req.get('payment_status', '')),
+                ]
+                text = " ".join(values).lower()
+                return q in text
+            self.filtered_requests = [r for r in self.document_requests if matches(r)]
+        # Reset to first page after filtering
+        self.current_page = 1
+        self.update_display()
 
     def create_table_row(self, row_index, request):
         """Create a table row with data and action buttons matching the image layout"""
@@ -1149,7 +1215,7 @@ class AdminRequestManager:
 
     def update_navigation(self):
         """Update navigation elements"""
-        total_pages = max(1, (len(self.document_requests) + self.requests_per_page - 1) // self.requests_per_page)
+        total_pages = max(1, (len(self.filtered_requests) + self.requests_per_page - 1) // self.requests_per_page)
         self.entry_page_no.config(state="normal")
         self.entry_page_no.delete(0, "end")
         self.entry_page_no.insert(0, f"Page {self.current_page} of {total_pages}")
