@@ -9,6 +9,7 @@ from admin_request import AdminRequestManager
 from admin_documents import AdminDocumentManager
 from admin_billing import AdminBillingManager
 from admin_student import AdminStudentManager
+from admin_user import AdminUserManager
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -549,7 +550,17 @@ class AdminDashboard:
         self.canvas.itemconfig(self.feedback_text, state="hidden")
         self.canvas.itemconfig(self.pending_text, state="hidden")
         
-        messagebox.showinfo("Users", "User management feature coming soon!")
+        # Create and show user manager
+        try:
+            self.user_manager = AdminUserManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ User manager loaded successfully")
+        except Exception as e:
+            print(f"❌ Error loading user manager: {e}")
+            messagebox.showerror("Error", f"Failed to load user manager: {str(e)}")
 
     def logout(self):
         """Logout admin"""

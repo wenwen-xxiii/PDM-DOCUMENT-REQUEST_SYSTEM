@@ -1,11 +1,12 @@
-# adminstudent.py - Admin Student Manager for Registrars
+# adminuser.py - Admin User Manager for User Management
 from pathlib import Path
-from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel
+from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel, Checkbutton
 import mysql.connector
 from mysql.connector import Error
 import sys
 import os
 from datetime import datetime
+from tkinter import ttk
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,29 +26,29 @@ def resource_path(relative_path):
 def relative_to_assets(path: str) -> Path:
     return Path(resource_path(f"resources/assets/adminrequest/{path}"))
 
-class AdminStudentManager:
+class AdminUserManager:
     def __init__(self, parent, get_db_connection=None, user_data=None):
         self.parent = parent
         self.get_db_connection = get_db_connection
         self.user_data = user_data or {}
         
-        # Student data
-        self.students = []
-        self.filtered_students = []
+        # User data
+        self.users = []
+        self.filtered_users = []
         self.search_query = ""
         self.current_page = 1
-        self.students_per_page = 9
+        self.users_per_page = 10
         
         # UI element storage
         self.images = []
         self.row_widgets = []
         
         self.setup_ui()
-        self.load_students()
+        self.load_users()
         self.update_display()
         
     def setup_ui(self):
-        """Setup the student management UI inside the parent frame"""
+        """Setup the user management UI inside the parent frame"""
         # Create a canvas that fits the content frame
         self.canvas = Canvas(
             self.parent,
@@ -66,7 +67,7 @@ class AdminStudentManager:
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
-        # Create search bar (top-right)
+        # Create search bar (top)
         self.create_searchbar()
         
         # Create table header
@@ -88,27 +89,26 @@ class AdminStudentManager:
         )
         # Place at the top, centered with more space
         self.search_entry.place(x=20, y=15, width=400, height=30)
-        self.search_entry.insert(0, "Search students...")
+        self.search_entry.insert(0, "Search users...")
         # Simple placeholder behavior
         def _on_focus_in(event):
-            if self.search_entry.get() == "Search students...":
+            if self.search_entry.get() == "Search users...":
                 self.search_entry.delete(0, "end")
         def _on_focus_out(event):
             if not self.search_entry.get().strip():
                 self.search_entry.delete(0, "end")
-                self.search_entry.insert(0, "Search students...")
+                self.search_entry.insert(0, "Search users...")
         self.search_entry.bind("<FocusIn>", _on_focus_in)
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
 
     def create_table_headers(self):
-        """Create table header labels for students"""
+        """Create table header labels for users"""
         headers = [
             (40.0, "No.", "center"),
-            (120.0, "Student No.", "center"),
-            (260.0, "Name", "center"),
-            (420.0, "Course", "center"),
-            (560.0, "Year Level", "center"),
+            (120.0, "Username", "center"),
+            (300.0, "Email", "center"),
+            (500.0, "User Type", "center"),
             (640.0, "Status", "center"),
             (770.0, "Actions", "center")
         ]
@@ -164,8 +164,8 @@ class AdminStudentManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_students(self):
-        """Load students from database"""
+    def load_users(self):
+        """Load users from database"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -176,52 +176,41 @@ class AdminStudentManager:
             
             cursor.execute("""
                 SELECT 
-                    s.student_id,
-                    s.student_number,
-                    s.first_name,
-                    s.last_name,
-                    s.middle_name,
-                    s.birth_date,
-                    s.gender,
-                    s.course,
-                    s.year_level,
-                    s.contact_number,
-                    s.address,
-                    s.enrollment_status,
-                    s.date_enrolled,
-                    s.has_obligations,
-                    s.obligations_details,
-                    u.email,
-                    u.is_active,
-                    u.last_login
-                FROM students s
-                LEFT JOIN users u ON s.user_id = u.user_id
-                ORDER BY s.student_number ASC
+                    user_id,
+                    username,
+                    email,
+                    user_type,
+                    is_active,
+                    is_verified,
+                    last_login,
+                    created_at
+                FROM users 
+                ORDER BY created_at DESC
             """)
             
-            self.students = cursor.fetchall()
+            self.users = cursor.fetchall()
             # Default filtered list is full list
-            self.filtered_students = list(self.students)
+            self.filtered_users = list(self.users)
             
             cursor.close()
             connection.close()
             
-            print(f"✅ Loaded {len(self.students)} students from database")
+            print(f"✅ Loaded {len(self.users)} users from database")
             
         except Error as e:
-            print(f"❌ Error loading students: {e}")
-            messagebox.showerror("Database Error", f"Failed to load students: {str(e)}")
-            self.students = []
+            print(f"❌ Error loading users: {e}")
+            messagebox.showerror("Database Error", f"Failed to load users: {str(e)}")
+            self.users = []
 
     def update_display(self):
         """Update the display with current page data"""
         self.clear_table_rows()
         
-        if not self.filtered_students:
-            self.show_no_students_message()
+        if not self.filtered_users:
+            self.show_no_users_message()
             return
             
-        self.display_current_students()
+        self.display_current_users()
         self.update_navigation()
 
     def clear_table_rows(self):
@@ -238,50 +227,46 @@ class AdminStudentManager:
         # Clear canvas items except headers
         self.canvas.delete("row")
 
-    def display_current_students(self):
-        """Display students for current page"""
-        start_idx = (self.current_page - 1) * self.students_per_page
-        end_idx = start_idx + self.students_per_page
-        current_students = self.filtered_students[start_idx:end_idx]
+    def display_current_users(self):
+        """Display users for current page"""
+        start_idx = (self.current_page - 1) * self.users_per_page
+        end_idx = start_idx + self.users_per_page
+        current_users = self.filtered_users[start_idx:end_idx]
         
-        for i, student in enumerate(current_students):
-            self.create_table_row(i, student)
+        for i, user in enumerate(current_users):
+            self.create_table_row(i, user)
 
     def on_search_change(self, event=None):
         """Handle search text changes and filter the list"""
         query = self.search_entry.get().strip()
         # Ignore placeholder
-        if query == "Search students...":
+        if query == "Search users...":
             query = ""
         self.search_query = query.lower()
         self.apply_search_filter()
 
     def apply_search_filter(self):
-        """Filter students into filtered_students based on search_query"""
+        """Filter users into filtered_users based on search_query"""
         if not self.search_query:
-            self.filtered_students = list(self.students)
+            self.filtered_users = list(self.users)
         else:
             q = self.search_query
-            def matches(student):
+            def matches(user):
                 values = [
-                    str(student.get('student_number', '')),
-                    str(student.get('first_name', '')),
-                    str(student.get('last_name', '')),
-                    str(student.get('middle_name', '')),
-                    str(student.get('course', '')),
-                    str(student.get('year_level', '')),
-                    str(student.get('enrollment_status', '')),
-                    str(student.get('contact_number', '')),
-                    str(student.get('email', '')),
+                    str(user.get('username', '')),
+                    str(user.get('email', '')),
+                    str(user.get('user_type', '')),
+                    "active" if user.get('is_active') else "inactive",
+                    "verified" if user.get('is_verified') else "unverified"
                 ]
                 text = " ".join(values).lower()
                 return q in text
-            self.filtered_students = [s for s in self.students if matches(s)]
+            self.filtered_users = [u for u in self.users if matches(u)]
         # Reset to first page after filtering
         self.current_page = 1
         self.update_display()
 
-    def create_table_row(self, row_index, student):
+    def create_table_row(self, row_index, user):
         """Create a table row with data and action buttons"""
         y_position = 110 + (row_index * 45)
         
@@ -293,23 +278,17 @@ class AdminStudentManager:
         )
         
         # Calculate row number (global index)
-        row_number = ((self.current_page - 1) * self.students_per_page) + row_index + 1
+        row_number = ((self.current_page - 1) * self.users_per_page) + row_index + 1
         
-        # Format student name
-        full_name = f"{student['first_name']} {student['last_name']}"
-        if student['middle_name']:
-            full_name = f"{student['first_name']} {student['middle_name']} {student['last_name']}"
-        
-        # Status display with color coding
-        status_text = student['enrollment_status']
+        # Format status display
+        status_text = "Active" if user['is_active'] else "Inactive"
         
         # Create text elements for the row with proper alignment
         text_configs = [
             (40.0, str(row_number), "center"),
-            (120.0, student['student_number'], "center"),
-            (260.0, full_name[:20] + "..." if len(full_name) > 20 else full_name, "center"),
-            (420.0, student['course'][:25] + "..." if len(student['course']) > 25 else student['course'], "center"),
-            (560.0, student['year_level'], "center"),
+            (120.0, user['username'][:15] + "..." if len(user['username']) > 15 else user['username'], "center"),
+            (300.0, user['email'][:25] + "..." if len(user['email']) > 25 else user['email'], "center"),
+            (500.0, user['user_type'].title(), "center"),
             (640.0, status_text, "center")
         ]
         
@@ -324,9 +303,9 @@ class AdminStudentManager:
             )
         
         # Create action buttons
-        self.create_row_buttons(row_index, student, y_position)
+        self.create_row_buttons(row_index, user, y_position)
 
-    def create_row_buttons(self, row_index, student, y_position):
+    def create_row_buttons(self, row_index, user, y_position):
         """Create action buttons for each row"""
         button_widgets = []
         
@@ -338,7 +317,7 @@ class AdminStudentManager:
             bg="#007BFF",
             fg="#FFFFFF",
             relief="flat",
-            command=lambda s=student: self.view_student_details(s)
+            command=lambda u=user: self.view_user_details(u)
         )
         view_button.place(x=680, y=y_position + 8, width=50, height=25)
         button_widgets.append(view_button)
@@ -351,15 +330,15 @@ class AdminStudentManager:
             bg="#28a745",
             fg="#FFFFFF",
             relief="flat",
-            command=lambda s=student: self.edit_student(s)
+            command=lambda u=user: self.edit_user(u)
         )
         edit_button.place(x=740, y=y_position + 8, width=50, height=25)
         button_widgets.append(edit_button)
         
         # Status-specific action buttons
-        enrollment_status = student['enrollment_status']
+        is_active = user['is_active']
         
-        if enrollment_status == 'Enrolled':
+        if is_active:
             # Deactivate button
             deactivate_button = Button(
                 self.parent,
@@ -368,82 +347,56 @@ class AdminStudentManager:
                 bg="#dc3545",
                 fg="#FFFFFF",
                 relief="flat",
-                command=lambda s=student: self.change_enrollment_status(s, 'Inactive')
+                command=lambda u=user: self.toggle_user_status(u, False)
             )
             deactivate_button.place(x=800, y=y_position + 8, width=70, height=25)
             button_widgets.append(deactivate_button)
             
-        elif enrollment_status == 'Inactive':
-            # Reactivate button
-            reactivate_button = Button(
+        else:
+            # Activate button
+            activate_button = Button(
                 self.parent,
-                text="Reactivate",
+                text="Activate",
                 font=("Inter", 9),
                 bg="#28a745",
                 fg="#FFFFFF",
                 relief="flat",
-                command=lambda s=student: self.change_enrollment_status(s, 'Enrolled')
+                command=lambda u=user: self.toggle_user_status(u, True)
             )
-            reactivate_button.place(x=800, y=y_position + 8, width=70, height=25)
-            button_widgets.append(reactivate_button)
-            
-        else:
-            # Disabled button for graduated/transferred
-            disabled_button = Button(
-                self.parent,
-                text="N/A",
-                font=("Inter", 9),
-                bg="#CCCCCC",
-                fg="#666666",
-                relief="flat",
-                state="disabled"
-            )
-            disabled_button.place(x=800, y=y_position + 8, width=70, height=25)
-            button_widgets.append(disabled_button)
+            activate_button.place(x=800, y=y_position + 8, width=70, height=25)
+            button_widgets.append(activate_button)
         
         self.row_widgets.append(button_widgets)
 
-    def view_student_details(self, student):
-        """Open student details dialog"""
+    def view_user_details(self, user):
+        """Open user details dialog"""
         dialog = Toplevel(self.parent)
-        dialog.title(f"Student Details - {student['student_number']}")
-        dialog.geometry("500x700")
+        dialog.title(f"User Details - {user['username']}")
+        dialog.geometry("500x600")
         dialog.resizable(False, False)
         
         # Center the dialog
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Student details
+        # User details
         details_frame = Frame(dialog, bg="#FFFFFF")
         details_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
         # Title
-        title_label = Label(details_frame, text="Student Details", 
+        title_label = Label(details_frame, text="User Details", 
                            font=("Inter", 16, "bold"), bg="#FFFFFF", fg="#792D1B")
         title_label.pack(pady=(0, 20))
         
-        # Student information
-        full_name = f"{student['first_name']} {student['last_name']}"
-        if student['middle_name']:
-            full_name = f"{student['first_name']} {student['middle_name']} {student['last_name']}"
-        
+        # User information
         info_labels = [
-            ("Student Number:", student['student_number']),
-            ("Full Name:", full_name),
-            ("Birth Date:", student['birth_date'].strftime('%Y-%m-%d') if student['birth_date'] else "N/A"),
-            ("Gender:", student['gender'] or "N/A"),
-            ("Course:", student['course']),
-            ("Year Level:", student['year_level']),
-            ("Contact Number:", student['contact_number'] or "N/A"),
-            ("Address:", student['address'] or "N/A"),
-            ("Enrollment Status:", student['enrollment_status']),
-            ("Date Enrolled:", student['date_enrolled'].strftime('%Y-%m-%d') if student['date_enrolled'] else "N/A"),
-            ("Has Obligations:", "Yes" if student['has_obligations'] else "No"),
-            ("Obligations Details:", student['obligations_details'] or "None"),
-            ("Email:", student['email'] or "N/A"),
-            ("Account Active:", "Yes" if student['is_active'] else "No"),
-            ("Last Login:", student['last_login'].strftime('%Y-%m-%d %H:%M:%S') if student['last_login'] else "Never"),
+            ("Username:", user['username']),
+            ("Email:", user['email']),
+            ("User Type:", user['user_type'].title()),
+            ("Account Status:", "Active" if user['is_active'] else "Inactive"),
+            ("Email Verified:", "Yes" if user['is_verified'] else "No"),
+            ("Last Login:", user['last_login'].strftime('%Y-%m-%d %H:%M:%S') if user['last_login'] else "Never"),
+            ("Created At:", user['created_at'].strftime('%Y-%m-%d %H:%M:%S') if user['created_at'] else "N/A"),
         ]
         
         for label_text, value_text in info_labels:
@@ -462,11 +415,11 @@ class AdminStudentManager:
         Button(dialog, text="Close", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
                relief="flat", command=dialog.destroy).pack(pady=20)
 
-    def edit_student(self, student):
-        """Open edit student dialog"""
+    def edit_user(self, user):
+        """Open edit user dialog"""
         dialog = Toplevel(self.parent)
-        dialog.title(f"Edit Student - {student['student_number']}")
-        dialog.geometry("400x600")
+        dialog.title(f"Edit User - {user['username']}")
+        dialog.geometry("400x500")
         dialog.resizable(False, False)
         
         # Center the dialog
@@ -474,85 +427,59 @@ class AdminStudentManager:
         dialog.grab_set()
         
         # Form fields
-        Label(dialog, text="Student Number:", font=("Inter", 10, "bold")).place(x=20, y=20)
-        student_no_entry = Entry(dialog, font=("Inter", 10), width=30)
-        student_no_entry.place(x=20, y=45)
-        student_no_entry.insert(0, student['student_number'])
-        student_no_entry.config(state="readonly")
+        Label(dialog, text="Username:", font=("Inter", 10, "bold")).place(x=20, y=20)
+        username_entry = Entry(dialog, font=("Inter", 10), width=30)
+        username_entry.place(x=20, y=45)
+        username_entry.insert(0, user['username'])
+        username_entry.config(state="readonly")
         
-        Label(dialog, text="First Name:", font=("Inter", 10, "bold")).place(x=20, y=80)
-        first_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        first_name_entry.place(x=20, y=105)
-        first_name_entry.insert(0, student['first_name'])
+        Label(dialog, text="Email:", font=("Inter", 10, "bold")).place(x=20, y=80)
+        email_entry = Entry(dialog, font=("Inter", 10), width=30)
+        email_entry.place(x=20, y=105)
+        email_entry.insert(0, user['email'])
         
-        Label(dialog, text="Last Name:", font=("Inter", 10, "bold")).place(x=20, y=140)
-        last_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        last_name_entry.place(x=20, y=165)
-        last_name_entry.insert(0, student['last_name'])
+        Label(dialog, text="User Type:", font=("Inter", 10, "bold")).place(x=20, y=140)
+        user_type_var = StringVar()
+        user_type_combo = ttk.Combobox(dialog, textvariable=user_type_var, width=27, state="readonly")
+        user_type_combo['values'] = ('student', 'admin', 'registrar')
+        user_type_combo.place(x=20, y=165)
+        user_type_var.set(user['user_type'])
         
-        Label(dialog, text="Middle Name:", font=("Inter", 10, "bold")).place(x=20, y=200)
-        middle_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        middle_name_entry.place(x=20, y=225)
-        middle_name_entry.insert(0, student['middle_name'] or "")
-        
-        Label(dialog, text="Course:", font=("Inter", 10, "bold")).place(x=20, y=260)
-        course_entry = Entry(dialog, font=("Inter", 10), width=30)
-        course_entry.place(x=20, y=285)
-        course_entry.insert(0, student['course'])
-        
-        Label(dialog, text="Year Level:", font=("Inter", 10, "bold")).place(x=20, y=320)
-        from tkinter import ttk
-        year_level_var = StringVar()
-        year_level_combo = ttk.Combobox(dialog, textvariable=year_level_var, width=27, state="readonly")
-        year_level_combo['values'] = ('1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
-        year_level_combo.place(x=20, y=345)
-        year_level_var.set(student['year_level'])
-        
-        Label(dialog, text="Contact Number:", font=("Inter", 10, "bold")).place(x=20, y=380)
-        contact_entry = Entry(dialog, font=("Inter", 10), width=30)
-        contact_entry.place(x=20, y=405)
-        contact_entry.insert(0, student['contact_number'] or "")
-        
-        Label(dialog, text="Address:", font=("Inter", 10, "bold")).place(x=20, y=440)
-        from tkinter import Text
-        address_text = Text(dialog, font=("Inter", 10), width=35, height=3)
-        address_text.place(x=20, y=465)
-        address_text.insert("1.0", student['address'] or "")
+        Label(dialog, text="Email Verified:", font=("Inter", 10, "bold")).place(x=20, y=200)
+        verified_var = StringVar()
+        verified_check = Checkbutton(dialog, variable=verified_var, font=("Inter", 10))
+        verified_check.place(x=20, y=225)
+        verified_var.set("1" if user['is_verified'] else "0")
         
         # Buttons
-        def save_student():
-            first_name = first_name_entry.get().strip()
-            last_name = last_name_entry.get().strip()
-            middle_name = middle_name_entry.get().strip()
-            course = course_entry.get().strip()
-            year_level = year_level_var.get()
-            contact_number = contact_entry.get().strip()
-            address = address_text.get("1.0", "end").strip()
+        def save_user():
+            email = email_entry.get().strip()
+            user_type = user_type_var.get()
+            is_verified = verified_var.get() == "1"
             
-            if not all([first_name, last_name, course, year_level]):
-                messagebox.showerror("Error", "First name, last name, course, and year level are required")
+            if not email:
+                messagebox.showerror("Error", "Email is required")
                 return
             
-            success = self.update_student(student['student_id'], first_name, last_name, middle_name, 
-                                        course, year_level, contact_number, address)
+            success = self.update_user(user['user_id'], email, user_type, is_verified)
             
             if success:
                 dialog.destroy()
-                self.load_students()
+                self.load_users()
                 self.update_display()
             else:
-                messagebox.showerror("Error", "Failed to update student")
+                messagebox.showerror("Error", "Failed to update user")
         
         def cancel_form():
             dialog.destroy()
         
         Button(dialog, text="Save", font=("Inter", 10, "bold"), bg="#28a745", fg="#FFFFFF", 
-               relief="flat", command=save_student).place(x=20, y=550, width=100, height=35)
+               relief="flat", command=save_user).place(x=20, y=450, width=100, height=35)
         Button(dialog, text="Cancel", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=cancel_form).place(x=140, y=550, width=100, height=35)
+               relief="flat", command=cancel_form).place(x=140, y=450, width=100, height=35)
 
-    def update_student(self, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address):
-        """Update student information in database"""
+    def update_user(self, user_id, email, user_type, is_verified):
+        """Update user information in database"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -561,31 +488,30 @@ class AdminStudentManager:
             cursor = connection.cursor()
             
             cursor.execute("""
-                UPDATE students 
-                SET first_name = %s, last_name = %s, middle_name = %s, course = %s, 
-                    year_level = %s, contact_number = %s, address = %s
-                WHERE student_id = %s
-            """, (first_name, last_name, middle_name, course, year_level, contact_number, address, student_id))
+                UPDATE users 
+                SET email = %s, user_type = %s, is_verified = %s
+                WHERE user_id = %s
+            """, (email, user_type, is_verified, user_id))
             
             connection.commit()
             cursor.close()
             connection.close()
             
-            print(f"✅ Updated student: {first_name} {last_name}")
+            print(f"✅ Updated user: {email}")
             return True
             
         except Error as e:
-            print(f"❌ Error updating student: {e}")
+            print(f"❌ Error updating user: {e}")
             return False
 
-    def change_enrollment_status(self, student, new_status):
-        """Change student enrollment status"""
-        status_text = "deactivate" if new_status == 'Inactive' else "reactivate"
+    def toggle_user_status(self, user, new_status):
+        """Change user active status"""
+        status_text = "deactivate" if not new_status else "activate"
         
         if messagebox.askyesno("Change Status", 
-                             f"{status_text.title()} student {student['student_number']}?\n"
-                             f"Name: {student['first_name']} {student['last_name']}\n"
-                             f"Course: {student['course']}"):
+                             f"{status_text.title()} user {user['username']}?\n"
+                             f"Email: {user['email']}\n"
+                             f"Type: {user['user_type']}"):
             
             try:
                 connection = self.get_db_connection()
@@ -596,33 +522,33 @@ class AdminStudentManager:
                 cursor = connection.cursor()
                 
                 cursor.execute("""
-                    UPDATE students 
-                    SET enrollment_status = %s
-                    WHERE student_id = %s
-                """, (new_status, student['student_id']))
+                    UPDATE users 
+                    SET is_active = %s
+                    WHERE user_id = %s
+                """, (new_status, user['user_id']))
                 
                 connection.commit()
                 cursor.close()
                 connection.close()
                 
-                print(f"✅ Student {student['student_number']} status changed to {new_status}")
-                self.load_students()
+                print(f"✅ User {user['username']} status changed to {'Active' if new_status else 'Inactive'}")
+                self.load_users()
                 self.update_display()
                 
             except Error as e:
-                print(f"❌ Error changing student status: {e}")
+                print(f"❌ Error changing user status: {e}")
                 messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
 
-    def show_no_students_message(self):
-        """Show message when no students exist"""
+    def show_no_users_message(self):
+        """Show message when no users exist"""
         self.canvas.create_text(
-            450, 200, anchor="center", text="No students found",
+            450, 200, anchor="center", text="No users found",
             fill="#666666", font=("Inter", 14, "bold"), tags="row"
         )
 
     def update_navigation(self):
         """Update navigation elements"""
-        total_pages = max(1, (len(self.filtered_students) + self.students_per_page - 1) // self.students_per_page)
+        total_pages = max(1, (len(self.filtered_users) + self.users_per_page - 1) // self.users_per_page)
         self.entry_page_no.config(state="normal")
         self.entry_page_no.delete(0, "end")
         self.entry_page_no.insert(0, f"Page {self.current_page} of {total_pages}")
@@ -639,18 +565,18 @@ class AdminStudentManager:
 
     def next_page(self):
         """Go to next page"""
-        total_pages = max(1, (len(self.filtered_students) + self.students_per_page - 1) // self.students_per_page)
+        total_pages = max(1, (len(self.filtered_users) + self.users_per_page - 1) // self.users_per_page)
         if self.current_page < total_pages:
             self.current_page += 1
             self.update_display()
 
-    def refresh_students(self):
-        """Refresh the students list"""
-        print("🔄 Refreshing students...")
+    def refresh_users(self):
+        """Refresh the users list"""
+        print("🔄 Refreshing users...")
         try:
-            self.load_students()
+            self.load_users()
             self.current_page = 1
             self.update_display()
-            print(f"✅ Refresh complete - {len(self.students)} students loaded")
+            print(f"✅ Refresh complete - {len(self.users)} users loaded")
         except Exception as e:
             print(f"❌ Error during refresh: {e}")
