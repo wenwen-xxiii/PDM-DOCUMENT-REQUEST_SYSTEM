@@ -7,6 +7,7 @@ import sys
 import os
 from admin_request import AdminRequestManager
 from admin_documents import AdminDocumentManager
+from admin_billing import AdminBillingManager
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -498,7 +499,17 @@ class AdminDashboard:
         self.canvas.itemconfig(self.feedback_text, state="hidden")
         self.canvas.itemconfig(self.pending_text, state="hidden")
         
-        messagebox.showinfo("Billing", "Billing and payments feature coming soon!")
+        # Create and show billing manager
+        try:
+            self.billing_manager = AdminBillingManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ Billing manager loaded successfully")
+        except Exception as e:
+            print(f"❌ Error loading billing manager: {e}")
+            messagebox.showerror("Error", f"Failed to load billing manager: {str(e)}")
 
     def show_feedback(self):
         """Show feedback management"""
