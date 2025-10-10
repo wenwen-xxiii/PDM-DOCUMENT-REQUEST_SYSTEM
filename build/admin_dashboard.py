@@ -8,6 +8,7 @@ import os
 from admin_request import AdminRequestManager
 from admin_documents import AdminDocumentManager
 from admin_billing import AdminBillingManager
+from admin_student import AdminStudentManager
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -448,10 +449,17 @@ class AdminDashboard:
         self.canvas.itemconfig(self.feedback_text, state="hidden")
         self.canvas.itemconfig(self.pending_text, state="hidden")
         
-        # Add students management content here
-        label = Label(self.content_frame, text="Students Management - Coming Soon", 
-                     bg="#FFFFFF", font=("Inter", 16), fg="#666666")
-        label.pack(expand=True, fill="both")
+        # Create and show student manager
+        try:
+            self.student_manager = AdminStudentManager(
+                parent=self.content_frame,
+                get_db_connection=self.get_db_connection,
+                user_data=self.user_data
+            )
+            print("✅ Student manager loaded successfully")
+        except Exception as e:
+            print(f"❌ Error loading student manager: {e}")
+            messagebox.showerror("Error", f"Failed to load student manager: {str(e)}")
 
     def show_documents(self):
         """Show document types management"""
