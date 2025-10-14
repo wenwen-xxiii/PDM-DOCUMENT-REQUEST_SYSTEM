@@ -66,8 +66,11 @@ class AdminBillingManager:
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
-        # Create search bar (top area)
+        # Create search bar (top right)
         self.create_searchbar()
+        
+        # Create title label (top left)
+        self.create_title_label()
         
         # Create table header
         self.create_table_headers()
@@ -76,18 +79,18 @@ class AdminBillingManager:
         self.create_navigation_controls()
         
     def create_searchbar(self):
-        """Create a search entry at the top and bind filtering"""
-        # Search entry positioned at the top
+        """Create a search entry at the top right"""
+        # Search entry positioned at the top right
         self.search_entry = Entry(
             self.parent,
             bd=1,
             bg="#FFFFFF",
             fg="#000716",
             highlightthickness=1,
-            font=("Inter", 10)
+            font=("Inter", 12)
         )
-        # Place at the top, leaving space for search bar
-        self.search_entry.place(x=640, y=15, width=220, height=24)
+        # Place at the top right
+        self.search_entry.place(x=525, y=18, width=350, height=30)
         self.search_entry.insert(0, "Search payments...")
         # Simple placeholder behavior
         def _on_focus_in(event):
@@ -101,24 +104,35 @@ class AdminBillingManager:
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
 
+    def create_title_label(self):
+        """Create a title label in the top left"""
+        self.title_label = Label(
+            self.parent,
+            text="Billing Management",
+            font=("Inter", 18, "bold"),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.title_label.place(x=20, y=15)
+
     def create_table_headers(self):
         """Create table header labels for payments"""
         headers = [
             (40.0, "No.", "center"),
-            (150.0, "Reference Number", "center"),
-            (300.0, "Student", "center"),
-            (450.0, "Amount", "center"),
-            (550.0, "Method", "center"),
-            (650.0, "Status", "center"),
-            (770.0, "Actions", "center")
+            (170.0, "Reference Number", "center"),
+            (330.0, "Student", "center"),
+            (480.0, "Amount", "center"),
+            (570.0, "Method", "center"),
+            (670.0, "Status", "center"),
+            (790.0, "Actions", "center")
         ]
         
         # Header background - dark brown like in the image
-        self.canvas.create_rectangle(20, 50, 875, 90, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(20, 60, 875, 100, fill="#792D1B", outline="")
         
         for x, text, anchor in headers:
             self.canvas.create_text(
-                x, 70, 
+                x, 80, 
                 anchor=anchor, 
                 text=text, 
                 fill="#FFFFFF", 
@@ -283,7 +297,7 @@ class AdminBillingManager:
 
     def create_table_row(self, row_index, payment):
         """Create a table row with data and action buttons"""
-        y_position = 100 + (row_index * 45)
+        y_position = 110 + (row_index * 45)
         
         # Row background (alternating colors)
         fill_color = "#FFFFFF" if row_index % 2 == 0 else "#F8F8F8"
@@ -304,11 +318,11 @@ class AdminBillingManager:
         # Create text elements for the row with proper alignment
         text_configs = [
             (40.0, str(row_number), "center"),
-            (150.0, payment['reference_number'] or "N/A", "center"),
-            (300.0, payment['student_name'][:15] + "..." if len(payment['student_name']) > 15 else payment['student_name'], "center"),
-            (450.0, amount_text, "center"),
-            (550.0, payment['payment_method'].title(), "center"),
-            (650.0, status_text, "center")
+            (170.0, payment['reference_number'] or "N/A", "center"),
+            (340.0, payment['student_name'][:15] + "..." if len(payment['student_name']) > 15 else payment['student_name'], "center"),
+            (480.0, amount_text, "center"),
+            (570.0, payment['payment_method'].title(), "center"),
+            (670.0, status_text, "center")
         ]
         
         for x, text, anchor in text_configs:
@@ -340,7 +354,7 @@ class AdminBillingManager:
             relief="flat",
             command=lambda p=payment: self.view_payment_details(p)
         )
-        view_button.place(x=720, y=y_position + 8, width=50, height=25)
+        view_button.place(x=740, y=y_position + 8, width=50, height=25)
         button_widgets.append(view_button)
         
         # Status-specific action buttons
@@ -355,7 +369,7 @@ class AdminBillingManager:
                 relief="flat",
                 command=lambda p=payment: self.approve_payment(p)
             )
-            approve_button.place(x=780, y=y_position + 8, width=60, height=25)
+            approve_button.place(x=800, y=y_position + 8, width=60, height=25)
             button_widgets.append(approve_button)
             
         elif status == 'success':
@@ -369,7 +383,7 @@ class AdminBillingManager:
                 relief="flat",
                 command=lambda p=payment: self.refund_payment(p)
             )
-            refund_button.place(x=780, y=y_position + 8, width=60, height=25)
+            refund_button.place(x=800, y=y_position + 8, width=60, height=25)
             button_widgets.append(refund_button)
             
         else:
@@ -383,7 +397,7 @@ class AdminBillingManager:
                 relief="flat",
                 state="disabled"
             )
-            disabled_button.place(x=780, y=y_position + 8, width=60, height=25)
+            disabled_button.place(x=800, y=y_position + 8, width=60, height=25)
             button_widgets.append(disabled_button)
         
         self.row_widgets.append(button_widgets)
