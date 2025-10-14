@@ -87,7 +87,7 @@ class AdminRequestManager:
         self.canvas.create_text(
             20, 28, 
             anchor="w", 
-            text="Requests", 
+            text="Requests Management", 
             fill="#792D1B", 
             font=("Inter", 18, "bold"),
         )

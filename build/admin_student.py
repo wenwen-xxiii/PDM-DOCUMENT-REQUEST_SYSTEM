@@ -69,6 +69,12 @@ class AdminStudentManager:
         # Create search bar (top-right)
         self.create_searchbar()
         
+        # Create title label (top left)
+        self.create_title_label()
+        
+        # Create action buttons (under search bar)
+        self.create_action_buttons()
+        
         # Create table header
         self.create_table_headers()
         
@@ -76,8 +82,8 @@ class AdminStudentManager:
         self.create_navigation_controls()
         
     def create_searchbar(self):
-        """Create a search entry at the top with more space"""
-        # Search entry positioned at the top with more space
+        """Create a search entry at the top right"""
+        # Search entry positioned at the top right
         self.search_entry = Entry(
             self.parent,
             bd=1,
@@ -86,8 +92,8 @@ class AdminStudentManager:
             highlightthickness=1,
             font=("Inter", 12)
         )
-        # Place at the top, centered with more space
-        self.search_entry.place(x=20, y=15, width=400, height=30)
+        # Place at the top right
+        self.search_entry.place(x=525, y=18, width=350, height=30)
         self.search_entry.insert(0, "Search students...")
         # Simple placeholder behavior
         def _on_focus_in(event):
@@ -100,6 +106,43 @@ class AdminStudentManager:
         self.search_entry.bind("<FocusIn>", _on_focus_in)
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
+
+    def create_title_label(self):
+        """Create a title label in the top left"""
+        self.title_label = Label(
+            self.parent,
+            text="Student Management",
+            font=("Inter", 18, "bold"),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.title_label.place(x=20, y=15)
+
+    def create_action_buttons(self):
+        """Create action buttons under the search bar"""
+        # Add Student button
+        self.button_add_student = Button(
+            self.parent,
+            text="Add Student",
+            font=("Inter", 10, "bold"),
+            bg="#28a745",
+            fg="#FFFFFF",
+            relief="flat",
+            command=self.add_student
+        )
+        self.button_add_student.place(x=625, y=60, width=120, height=35)
+        
+        # Import CSV button
+        self.button_import_csv = Button(
+            self.parent,
+            text="Import CSV",
+            font=("Inter", 10, "bold"),
+            bg="#007BFF",
+            fg="#FFFFFF",
+            relief="flat",
+            command=self.import_csv_file
+        )
+        self.button_import_csv.place(x=755, y=60, width=120, height=35)
 
     def create_table_headers(self):
         """Create table header labels for students"""
@@ -114,11 +157,11 @@ class AdminStudentManager:
         ]
         
         # Header background - dark brown like in the image
-        self.canvas.create_rectangle(20, 60, 875, 100, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(20, 110, 875, 150, fill="#792D1B", outline="")
         
         for x, text, anchor in headers:
             self.canvas.create_text(
-                x, 80, 
+                x, 130, 
                 anchor=anchor, 
                 text=text, 
                 fill="#FFFFFF", 
@@ -283,7 +326,7 @@ class AdminStudentManager:
 
     def create_table_row(self, row_index, student):
         """Create a table row with data and action buttons"""
-        y_position = 110 + (row_index * 45)
+        y_position = 160 + (row_index * 45)
         
         # Row background (alternating colors)
         fill_color = "#FFFFFF" if row_index % 2 == 0 else "#F8F8F8"
@@ -403,6 +446,210 @@ class AdminStudentManager:
         
         self.row_widgets.append(button_widgets)
 
+    def add_student(self):
+        """Open add student dialog"""
+        self.open_student_form()
+
+    def import_csv_file(self):
+        """Open CSV import dialog"""
+        messagebox.showinfo("Import CSV", "CSV Import functionality will be implemented here")
+
+    def open_student_form(self, student=None):
+        """Open student form dialog"""
+        dialog = Toplevel(self.parent)
+        dialog.title("Add Student" if not student else f"Edit Student - {student['student_number']}")
+        dialog.geometry("500x750")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
+        
+        # Center the dialog on screen
+        dialog.transient(self.parent)
+        dialog.grab_set()
+        
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 750
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
+        
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=750,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        title_text = "Add Student" if not student else "Edit Student"
+        canvas.create_text(
+            250.0, 65.0,
+            text=title_text,
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 700.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # Form fields - two column layout with centered design
+        field_y_start = 130
+        field_spacing = 70
+        left_column_x = 50
+        right_column_x = 265
+        field_width = 180
+        
+        # Left Column Fields
+        # Student Number field
+        canvas.create_text(
+            left_column_x, field_y_start,
+            text="Student Number:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        student_no_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        student_no_entry.place(x=left_column_x, y=field_y_start + 20, width=field_width, height=30)
+        
+        # First Name field
+        canvas.create_text(
+            left_column_x, field_y_start + field_spacing,
+            text="First Name:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        first_name_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        first_name_entry.place(x=left_column_x, y=field_y_start + field_spacing + 20, width=field_width, height=30)
+        
+        # Last Name field
+        canvas.create_text(
+            left_column_x, field_y_start + (field_spacing * 2),
+            text="Last Name:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        last_name_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        last_name_entry.place(x=left_column_x, y=field_y_start + (field_spacing * 2) + 20, width=field_width, height=30)
+        
+        # Middle Name field
+        canvas.create_text(
+            left_column_x, field_y_start + (field_spacing * 3),
+            text="Middle Name:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        middle_name_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        middle_name_entry.place(x=left_column_x, y=field_y_start + (field_spacing * 3) + 20, width=field_width, height=30)
+        
+        # Course field
+        canvas.create_text(
+            left_column_x, field_y_start + (field_spacing * 4),
+            text="Course:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        course_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        course_entry.place(x=left_column_x, y=field_y_start + (field_spacing * 4) + 20, width=field_width, height=30)
+        
+        # Right Column Fields
+        # Year Level field
+        canvas.create_text(
+            right_column_x, field_y_start,
+            text="Year Level:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        from tkinter import ttk
+        year_level_var = StringVar()
+        year_level_combo = ttk.Combobox(dialog, textvariable=year_level_var, width=18, state="readonly")
+        year_level_combo['values'] = ('1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
+        year_level_combo.place(x=right_column_x, y=field_y_start + 20, width=field_width, height=30)
+        
+        # Contact Number field
+        canvas.create_text(
+            right_column_x, field_y_start + field_spacing,
+            text="Contact Number:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        contact_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        contact_entry.place(x=right_column_x, y=field_y_start + field_spacing + 20, width=field_width, height=30)
+        
+        # Email field
+        canvas.create_text(
+            right_column_x, field_y_start + (field_spacing * 2),
+            text="Email:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+        )
+        email_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        email_entry.place(x=right_column_x, y=field_y_start + (field_spacing * 2) + 20, width=field_width, height=30)
+        
+        # Address field (spans both columns)
+        canvas.create_text(
+            250, field_y_start + (field_spacing * 5),
+            text="Address:", fill="#000000", font=("Inter", 11, "bold"), anchor="center"
+        )
+        from tkinter import Text
+        address_text = Text(dialog, font=("Inter", 10), width=35, height=3, bg="#FFFFFF", relief="solid", bd=1)
+        address_text.place(x=80, y=field_y_start + (field_spacing * 5) + 20, width=340, height=60)
+        
+        # Populate fields if editing
+        if student:
+            student_no_entry.insert(0, student['student_number'])
+            student_no_entry.config(state="readonly")
+            first_name_entry.insert(0, student['first_name'])
+            last_name_entry.insert(0, student['last_name'])
+            middle_name_entry.insert(0, student['middle_name'] or "")
+            course_entry.insert(0, student['course'])
+            year_level_var.set(student['year_level'])
+            contact_entry.insert(0, student['contact_number'] or "")
+            address_text.insert("1.0", student['address'] or "")
+            email_entry.insert(0, student['email'] or "")
+        
+        # Buttons
+        def save_student():
+            student_number = student_no_entry.get().strip()
+            first_name = first_name_entry.get().strip()
+            last_name = last_name_entry.get().strip()
+            middle_name = middle_name_entry.get().strip()
+            course = course_entry.get().strip()
+            year_level = year_level_var.get()
+            contact_number = contact_entry.get().strip()
+            address = address_text.get("1.0", "end").strip()
+            email = email_entry.get().strip()
+            
+            if not all([student_number, first_name, last_name, course, year_level]):
+                messagebox.showerror("Error", "Student number, first name, last name, course, and year level are required")
+                return
+            
+            if student:
+                # Update existing student
+                success = self.update_student(student['student_id'], first_name, last_name, middle_name, 
+                                            course, year_level, contact_number, address)
+            else:
+                # Add new student
+                success = self.add_new_student(student_number, first_name, last_name, middle_name, 
+                                            course, year_level, contact_number, address, email)
+            
+            if success:
+                dialog.destroy()
+                self.load_students()
+                self.update_display()
+            else:
+                messagebox.showerror("Error", "Failed to save student")
+        
+        def cancel_form():
+            dialog.destroy()
+        
+        # Save and Cancel buttons - centered
+        Button(dialog, text="Save", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
+               relief="flat", command=save_student).place(x=140, y=650, width=100, height=35)
+        Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
+               relief="flat", command=cancel_form).place(x=260, y=650, width=100, height=35)
+
     def view_student_details(self, student):
         """Open student details dialog"""
         dialog = Toplevel(self.parent)
@@ -464,92 +711,7 @@ class AdminStudentManager:
 
     def edit_student(self, student):
         """Open edit student dialog"""
-        dialog = Toplevel(self.parent)
-        dialog.title(f"Edit Student - {student['student_number']}")
-        dialog.geometry("400x600")
-        dialog.resizable(False, False)
-        
-        # Center the dialog
-        dialog.transient(self.parent)
-        dialog.grab_set()
-        
-        # Form fields
-        Label(dialog, text="Student Number:", font=("Inter", 10, "bold")).place(x=20, y=20)
-        student_no_entry = Entry(dialog, font=("Inter", 10), width=30)
-        student_no_entry.place(x=20, y=45)
-        student_no_entry.insert(0, student['student_number'])
-        student_no_entry.config(state="readonly")
-        
-        Label(dialog, text="First Name:", font=("Inter", 10, "bold")).place(x=20, y=80)
-        first_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        first_name_entry.place(x=20, y=105)
-        first_name_entry.insert(0, student['first_name'])
-        
-        Label(dialog, text="Last Name:", font=("Inter", 10, "bold")).place(x=20, y=140)
-        last_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        last_name_entry.place(x=20, y=165)
-        last_name_entry.insert(0, student['last_name'])
-        
-        Label(dialog, text="Middle Name:", font=("Inter", 10, "bold")).place(x=20, y=200)
-        middle_name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        middle_name_entry.place(x=20, y=225)
-        middle_name_entry.insert(0, student['middle_name'] or "")
-        
-        Label(dialog, text="Course:", font=("Inter", 10, "bold")).place(x=20, y=260)
-        course_entry = Entry(dialog, font=("Inter", 10), width=30)
-        course_entry.place(x=20, y=285)
-        course_entry.insert(0, student['course'])
-        
-        Label(dialog, text="Year Level:", font=("Inter", 10, "bold")).place(x=20, y=320)
-        from tkinter import ttk
-        year_level_var = StringVar()
-        year_level_combo = ttk.Combobox(dialog, textvariable=year_level_var, width=27, state="readonly")
-        year_level_combo['values'] = ('1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
-        year_level_combo.place(x=20, y=345)
-        year_level_var.set(student['year_level'])
-        
-        Label(dialog, text="Contact Number:", font=("Inter", 10, "bold")).place(x=20, y=380)
-        contact_entry = Entry(dialog, font=("Inter", 10), width=30)
-        contact_entry.place(x=20, y=405)
-        contact_entry.insert(0, student['contact_number'] or "")
-        
-        Label(dialog, text="Address:", font=("Inter", 10, "bold")).place(x=20, y=440)
-        from tkinter import Text
-        address_text = Text(dialog, font=("Inter", 10), width=35, height=3)
-        address_text.place(x=20, y=465)
-        address_text.insert("1.0", student['address'] or "")
-        
-        # Buttons
-        def save_student():
-            first_name = first_name_entry.get().strip()
-            last_name = last_name_entry.get().strip()
-            middle_name = middle_name_entry.get().strip()
-            course = course_entry.get().strip()
-            year_level = year_level_var.get()
-            contact_number = contact_entry.get().strip()
-            address = address_text.get("1.0", "end").strip()
-            
-            if not all([first_name, last_name, course, year_level]):
-                messagebox.showerror("Error", "First name, last name, course, and year level are required")
-                return
-            
-            success = self.update_student(student['student_id'], first_name, last_name, middle_name, 
-                                        course, year_level, contact_number, address)
-            
-            if success:
-                dialog.destroy()
-                self.load_students()
-                self.update_display()
-            else:
-                messagebox.showerror("Error", "Failed to update student")
-        
-        def cancel_form():
-            dialog.destroy()
-        
-        Button(dialog, text="Save", font=("Inter", 10, "bold"), bg="#28a745", fg="#FFFFFF", 
-               relief="flat", command=save_student).place(x=20, y=550, width=100, height=35)
-        Button(dialog, text="Cancel", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=cancel_form).place(x=140, y=550, width=100, height=35)
+        self.open_student_form(student)
 
     def update_student(self, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address):
         """Update student information in database"""
@@ -576,6 +738,43 @@ class AdminStudentManager:
             
         except Error as e:
             print(f"❌ Error updating student: {e}")
+            return False
+
+    def add_new_student(self, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email):
+        """Add new student to database"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                return False
+                
+            cursor = connection.cursor()
+            
+            # First, create a user account for the student
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, user_type, is_active, is_verified, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (student_number, email, 'default_password_hash', 'student', True, False, datetime.now()))
+            
+            user_id = cursor.lastrowid
+            
+            # Then create the student record
+            cursor.execute("""
+                INSERT INTO students (user_id, student_number, first_name, last_name, middle_name, 
+                                   course, year_level, contact_number, address, enrollment_status, 
+                                   date_enrolled, has_obligations, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, student_number, first_name, last_name, middle_name, course, year_level, 
+                  contact_number, address, 'Enrolled', datetime.now(), False, datetime.now()))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Added new student: {first_name} {last_name} ({student_number})")
+            return True
+            
+        except Error as e:
+            print(f"❌ Error adding student: {e}")
             return False
 
     def change_enrollment_status(self, student, new_status):
