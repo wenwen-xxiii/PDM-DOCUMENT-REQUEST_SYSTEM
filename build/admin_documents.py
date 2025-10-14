@@ -397,45 +397,123 @@ class AdminDocumentManager:
         """Open document type form dialog"""
         dialog = Toplevel(self.parent)
         dialog.title("Add Document Type" if not document else f"Edit Document Type - {document['code']}")
-        dialog.geometry("400x550")
+        dialog.geometry("500x650")
         dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
         
-        # Center the dialog
+        # Center the dialog on screen
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Form fields
-        Label(dialog, text="Document Code:", font=("Inter", 10, "bold")).place(x=20, y=20)
-        code_entry = Entry(dialog, font=("Inter", 10), width=30)
-        code_entry.place(x=20, y=45)
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 650
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
         
-        Label(dialog, text="Document Name:", font=("Inter", 10, "bold")).place(x=20, y=80)
-        name_entry = Entry(dialog, font=("Inter", 10), width=30)
-        name_entry.place(x=20, y=105)
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
         
-        Label(dialog, text="Fee Amount:", font=("Inter", 10, "bold")).place(x=20, y=140)
-        fee_entry = Entry(dialog, font=("Inter", 10), width=30)
-        fee_entry.place(x=20, y=165)
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=650,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
         
-        Label(dialog, text="Processing Days:", font=("Inter", 10, "bold")).place(x=20, y=200)
-        processing_entry = Entry(dialog, font=("Inter", 10), width=30)
-        processing_entry.place(x=20, y=225)
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
         
-        Label(dialog, text="Description:", font=("Inter", 10, "bold")).place(x=20, y=260)
+        # Header text
+        title_text = "Add Document Type" if not document else "Edit Document Type"
+        canvas.create_text(
+            250.0, 65.0,
+            text=title_text,
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 625.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # Form fields - centered layout like payment window
+        center_x = 250.0  # Center of the dialog
+        field_y_start = 130
+        field_spacing = 65
+        
+        # Document Code field
+        canvas.create_text(
+            center_x, field_y_start,
+            text="Document Code:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        code_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        code_entry.place(x=150, y=field_y_start + 20, width=200, height=30)
+        
+        # Document Name field
+        canvas.create_text(
+            center_x, field_y_start + field_spacing,
+            text="Document Name:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        name_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        name_entry.place(x=150, y=field_y_start + field_spacing + 20, width=200, height=30)
+        
+        # Fee Amount field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 2),
+            text="Fee Amount:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        fee_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        fee_entry.place(x=150, y=field_y_start + (field_spacing * 2) + 20, width=200, height=30)
+        
+        # Processing Days field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 3),
+            text="Processing Days:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        processing_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        processing_entry.place(x=150, y=field_y_start + (field_spacing * 3) + 20, width=200, height=30)
+        
+        # Description field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 4),
+            text="Description:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
         from tkinter import Text
-        desc_text = Text(dialog, font=("Inter", 10), width=35, height=4)
-        desc_text.place(x=20, y=285)
+        desc_text = Text(dialog, font=("Inter", 10), width=35, height=3, bg="#FFFFFF", relief="solid", bd=1)
+        desc_text.place(x=100, y=field_y_start + (field_spacing * 4) + 20, width=300, height=60)
         
         # Status checkbox
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 5),
+            text="Available:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
         from tkinter import Checkbutton, BooleanVar
         status_var = BooleanVar()
-        status_check = Checkbutton(dialog, text="Available", variable=status_var, font=("Inter", 10))
-        status_check.place(x=20, y=360)
+        status_check = Checkbutton(dialog, text="Enable Availability", variable=status_var, font=("Inter", 10), bg="#FFFFFF")
+        status_check.place(x=center_x - 80, y=field_y_start + (field_spacing * 5) + 20, width=160, height=20)
         
         # Clearance checkbox
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 6),
+            text="Requires Clearance:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
         clearance_var = BooleanVar()
-        clearance_check = Checkbutton(dialog, text="Requires Clearance", variable=clearance_var, font=("Inter", 10))
-        clearance_check.place(x=20, y=385)
+        clearance_check = Checkbutton(dialog, text="Enable Clearance Requirement", variable=clearance_var, font=("Inter", 10), bg="#FFFFFF")
+        clearance_check.place(x=center_x - 115, y=field_y_start + (field_spacing * 6) + 20, width=225, height=20)
         
         # Populate fields if editing
         if document:
@@ -485,10 +563,11 @@ class AdminDocumentManager:
         def cancel_form():
             dialog.destroy()
         
-        Button(dialog, text="Save", font=("Inter", 10, "bold"), bg="#28a745", fg="#FFFFFF", 
-               relief="flat", command=save_document).place(x=20, y=450, width=100, height=35)
-        Button(dialog, text="Cancel", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=cancel_form).place(x=140, y=450, width=100, height=35)
+        # Save and Cancel buttons - centered
+        Button(dialog, text="Save", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
+               relief="flat", command=save_document).place(x=140, y=580, width=100, height=35)
+        Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
+               relief="flat", command=cancel_form).place(x=260, y=580, width=100, height=35)
 
     def add_new_document_type(self, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
         """Add new document type to database"""
