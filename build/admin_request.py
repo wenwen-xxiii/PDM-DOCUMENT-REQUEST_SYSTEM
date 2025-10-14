@@ -39,7 +39,7 @@ class AdminRequestManager:
         self.filtered_requests = []
         self.search_query = ""
         self.current_page = 1
-        self.requests_per_page = 10
+        self.requests_per_page = 9
         
         # UI element storage
         self.images = []
@@ -69,6 +69,9 @@ class AdminRequestManager:
         
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         
+        # Create top section with "Req" label
+        self.create_top_section()
+        
         # Create search bar (top-right)
         self.create_searchbar()
 
@@ -77,6 +80,17 @@ class AdminRequestManager:
         
         # Create navigation controls
         self.create_navigation_controls()
+        
+    def create_top_section(self):
+        """Create the top section with Requests label"""
+        # Add "Requests" label on the top-left
+        self.canvas.create_text(
+            20, 28, 
+            anchor="w", 
+            text="Requests", 
+            fill="#792D1B", 
+            font=("Inter", 18, "bold"),
+        )
         
     def create_table_headers(self):
         """Create table header labels matching the image layout"""
@@ -92,11 +106,11 @@ class AdminRequestManager:
         ]
         
         # Header background - dark brown like in the image
-        self.canvas.create_rectangle(20, 10, 875, 50, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(20, 55, 875, 95, fill="#792D1B", outline="")
         
         for x, text, anchor in headers:
             self.canvas.create_text(
-                x, 30, 
+                x, 75, 
                 anchor=anchor, 
                 text=text, 
                 fill="#FFFFFF", 
@@ -116,7 +130,7 @@ class AdminRequestManager:
         )
         # Place near the top-right inside the content frame, avoiding scrollbar
         # Content area width ~895; leave room for scrollbar and padding
-        self.search_entry.place(x=640, y=17, width=220, height=24)
+        self.search_entry.place(x=525, y=18, width=350, height=30)
         self.search_entry.insert(0, "Search...")
         # Simple placeholder behavior
         def _on_focus_in(event):
@@ -299,7 +313,7 @@ class AdminRequestManager:
 
     def create_table_row(self, row_index, request):
         """Create a table row with data and action buttons matching the image layout"""
-        y_position = 60 + (row_index * 45)
+        y_position = 105 + (row_index * 45)
         
         # Row background (alternating colors like in the image)
         fill_color = "#FFFFFF" if row_index % 2 == 0 else "#F8F8F8"

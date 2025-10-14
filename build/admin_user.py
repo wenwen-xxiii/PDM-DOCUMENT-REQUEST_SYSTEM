@@ -70,6 +70,9 @@ class AdminUserManager:
         # Create search bar (top)
         self.create_searchbar()
         
+        # Create title label (top left)
+        self.create_title_label()
+        
         # Create table header
         self.create_table_headers()
         
@@ -77,8 +80,8 @@ class AdminUserManager:
         self.create_navigation_controls()
         
     def create_searchbar(self):
-        """Create a search entry at the top with more space"""
-        # Search entry positioned at the top with more space
+        """Create a search entry at the top right"""
+        # Search entry positioned at the top right
         self.search_entry = Entry(
             self.parent,
             bd=1,
@@ -87,8 +90,8 @@ class AdminUserManager:
             highlightthickness=1,
             font=("Inter", 12)
         )
-        # Place at the top, centered with more space
-        self.search_entry.place(x=20, y=15, width=400, height=30)
+        # Place at the top right
+        self.search_entry.place(x=525, y=18, width=350, height=30)
         self.search_entry.insert(0, "Search users...")
         # Simple placeholder behavior
         def _on_focus_in(event):
@@ -101,6 +104,17 @@ class AdminUserManager:
         self.search_entry.bind("<FocusIn>", _on_focus_in)
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
+
+    def create_title_label(self):
+        """Create a title label in the top left"""
+        self.title_label = Label(
+            self.parent,
+            text="User Management",
+            font=("Inter", 18, "bold"),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.title_label.place(x=20, y=15)
 
     def create_table_headers(self):
         """Create table header labels for users"""
@@ -374,21 +388,61 @@ class AdminUserManager:
         dialog.title(f"User Details - {user['username']}")
         dialog.geometry("500x600")
         dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
         
-        # Center the dialog
+        # Center the dialog on screen
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # User details
-        details_frame = Frame(dialog, bg="#FFFFFF")
-        details_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 600
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
         
-        # Title
-        title_label = Label(details_frame, text="User Details", 
-                           font=("Inter", 16, "bold"), bg="#FFFFFF", fg="#792D1B")
-        title_label.pack(pady=(0, 20))
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
         
-        # User information
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=600,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            250.0, 65.0,
+            text="User Details",
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 550.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # User information - centered layout
+        info_y_start = 130
+        line_height = 35
+        center_x = 250.0  # Center of the dialog
+        
         info_labels = [
             ("Username:", user['username']),
             ("Email:", user['email']),
@@ -399,69 +453,179 @@ class AdminUserManager:
             ("Created At:", user['created_at'].strftime('%Y-%m-%d %H:%M:%S') if user['created_at'] else "N/A"),
         ]
         
-        for label_text, value_text in info_labels:
-            frame = Frame(details_frame, bg="#FFFFFF")
-            frame.pack(fill="x", pady=3)
-            
-            label = Label(frame, text=label_text, font=("Inter", 10, "bold"), 
-                         bg="#FFFFFF", fg="#333333", width=20, anchor="w")
-            label.pack(side="left")
-            
-            value = Label(frame, text=value_text, font=("Inter", 10), 
-                         bg="#FFFFFF", fg="#666666", anchor="w", wraplength=300)
-            value.pack(side="left", padx=(10, 0))
+        for i, (label_text, value_text) in enumerate(info_labels):
+            # Create centered text for each detail
+            detail_text = f"{label_text} {value_text}"
+            canvas.create_text(
+                center_x, info_y_start + (i * line_height),
+                text=detail_text, fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+            )
         
         # Close button
-        Button(dialog, text="Close", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=dialog.destroy).pack(pady=20)
+        close_button = Button(
+            dialog,
+            text="Close",
+            font=("Inter", 12, "bold"),
+            bg="#6c757d",
+            fg="#FFFFFF",
+            relief="flat",
+            command=dialog.destroy
+        )
+        close_button.place(x=200, y=520, width=100, height=35)
 
     def edit_user(self, user):
         """Open edit user dialog"""
         dialog = Toplevel(self.parent)
         dialog.title(f"Edit User - {user['username']}")
-        dialog.geometry("400x500")
+        dialog.geometry("500x700")
         dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
         
-        # Center the dialog
+        # Center the dialog on screen
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Form fields
-        Label(dialog, text="Username:", font=("Inter", 10, "bold")).place(x=20, y=20)
-        username_entry = Entry(dialog, font=("Inter", 10), width=30)
-        username_entry.place(x=20, y=45)
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 700
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
+        
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=700,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            250.0, 65.0,
+            text="Edit User",
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 650.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # Form fields - centered layout like payment window
+        center_x = 250.0  # Center of the dialog
+        field_y_start = 130
+        field_spacing = 50
+        
+        # Username field
+        canvas.create_text(
+            center_x, field_y_start,
+            text="Username:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        username_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        username_entry.place(x=150, y=field_y_start + 20, width=200, height=30)
         username_entry.insert(0, user['username'])
         username_entry.config(state="readonly")
         
-        Label(dialog, text="Email:", font=("Inter", 10, "bold")).place(x=20, y=80)
-        email_entry = Entry(dialog, font=("Inter", 10), width=30)
-        email_entry.place(x=20, y=105)
+        # Email field
+        canvas.create_text(
+            center_x, field_y_start + field_spacing,
+            text="Email:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        email_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        email_entry.place(x=150, y=field_y_start + field_spacing + 20, width=200, height=30)
         email_entry.insert(0, user['email'])
         
-        Label(dialog, text="User Type:", font=("Inter", 10, "bold")).place(x=20, y=140)
+        # User Type field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 2),
+            text="User Type:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
         user_type_var = StringVar()
         user_type_combo = ttk.Combobox(dialog, textvariable=user_type_var, width=27, state="readonly")
         user_type_combo['values'] = ('student', 'admin', 'registrar')
-        user_type_combo.place(x=20, y=165)
+        user_type_combo.place(x=150, y=field_y_start + (field_spacing * 2) + 20, width=200, height=30)
         user_type_var.set(user['user_type'])
         
-        Label(dialog, text="Email Verified:", font=("Inter", 10, "bold")).place(x=20, y=200)
+        # Email Verified field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 3),
+            text="Email Verified:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
         verified_var = StringVar()
-        verified_check = Checkbutton(dialog, variable=verified_var, font=("Inter", 10))
-        verified_check.place(x=20, y=225)
+        verified_check = Checkbutton(dialog, variable=verified_var, font=("Inter", 10), bg="#FFFFFF")
+        verified_check.place(x=center_x - 10, y=field_y_start + (field_spacing * 3) + 20, width=20, height=20)
         verified_var.set("1" if user['is_verified'] else "0")
+        
+        # Password fields
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 4),
+            text="New Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        password_entry = Entry(dialog, font=("Inter", 10), width=30, show="*", justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        password_entry.place(x=150, y=field_y_start + (field_spacing * 4) + 20, width=200, height=30)
+        
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 5),
+            text="Confirm Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        confirm_password_entry = Entry(dialog, font=("Inter", 10), width=30, show="*", justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        confirm_password_entry.place(x=150, y=field_y_start + (field_spacing * 5) + 20, width=200, height=30)
+        
+        # Password update checkbox
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 6),
+            text="Update Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        update_password_var = StringVar()
+        update_password_check = Checkbutton(dialog, text="Enable Password Update", variable=update_password_var, 
+                                          font=("Inter", 10), bg="#FFFFFF")
+        update_password_check.place(x=center_x - 80, y=field_y_start + (field_spacing * 6) + 20, width=160, height=20)
         
         # Buttons
         def save_user():
             email = email_entry.get().strip()
             user_type = user_type_var.get()
             is_verified = verified_var.get() == "1"
+            new_password = password_entry.get().strip()
+            confirm_password = confirm_password_entry.get().strip()
+            update_password = update_password_var.get() == "1"
             
             if not email:
                 messagebox.showerror("Error", "Email is required")
                 return
             
-            success = self.update_user(user['user_id'], email, user_type, is_verified)
+            # Validate password if updating
+            if update_password:
+                if not new_password:
+                    messagebox.showerror("Error", "New password is required")
+                    return
+                if len(new_password) < 6:
+                    messagebox.showerror("Error", "Password must be at least 6 characters long")
+                    return
+                if new_password != confirm_password:
+                    messagebox.showerror("Error", "Passwords do not match")
+                    return
+            
+            success = self.update_user(user['user_id'], email, user_type, is_verified, 
+                                     new_password if update_password else None)
             
             if success:
                 dialog.destroy()
@@ -473,12 +637,13 @@ class AdminUserManager:
         def cancel_form():
             dialog.destroy()
         
-        Button(dialog, text="Save", font=("Inter", 10, "bold"), bg="#28a745", fg="#FFFFFF", 
-               relief="flat", command=save_user).place(x=20, y=450, width=100, height=35)
-        Button(dialog, text="Cancel", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=cancel_form).place(x=140, y=450, width=100, height=35)
+        # Save and Cancel buttons
+        Button(dialog, text="Save", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
+               relief="flat", command=save_user).place(x=150, y=620, width=100, height=35)
+        Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
+               relief="flat", command=cancel_form).place(x=270, y=620, width=100, height=35)
 
-    def update_user(self, user_id, email, user_type, is_verified):
+    def update_user(self, user_id, email, user_type, is_verified, new_password=None):
         """Update user information in database"""
         try:
             connection = self.get_db_connection()
@@ -487,11 +652,22 @@ class AdminUserManager:
                 
             cursor = connection.cursor()
             
-            cursor.execute("""
-                UPDATE users 
-                SET email = %s, user_type = %s, is_verified = %s
-                WHERE user_id = %s
-            """, (email, user_type, is_verified, user_id))
+            if new_password:
+                # Import hashlib for password hashing
+                import hashlib
+                hashed_password = hashlib.sha256(new_password.encode()).hexdigest()
+                
+                cursor.execute("""
+                    UPDATE users 
+                    SET email = %s, user_type = %s, is_verified = %s, password = %s
+                    WHERE user_id = %s
+                """, (email, user_type, is_verified, hashed_password, user_id))
+            else:
+                cursor.execute("""
+                    UPDATE users 
+                    SET email = %s, user_type = %s, is_verified = %s
+                    WHERE user_id = %s
+                """, (email, user_type, is_verified, user_id))
             
             connection.commit()
             cursor.close()

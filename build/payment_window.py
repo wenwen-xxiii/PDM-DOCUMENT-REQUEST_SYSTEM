@@ -130,7 +130,7 @@ class PaymentWindow:
         
     def _create_request_info(self):
         """Create request information display"""
-        info_y_start = 140
+        info_y_start = 150
         line_height = 30
         
         details = [
@@ -140,20 +140,21 @@ class PaymentWindow:
             ("Delivery:", self.request_data['delivery_mode'].title()),
         ]
         
+        # Center the details section
+        center_x = 254.0  # Center of the window (508/2)
+        
         for i, (label, value) in enumerate(details):
+            # Create centered text for each detail
+            detail_text = f"{label} {value}"
             self.canvas.create_text(
-                50.0, info_y_start + (i * line_height),
-                text=label, fill="#000000", font=("Arial", 12, "bold"), anchor="w"
-            )
-            self.canvas.create_text(
-                200.0, info_y_start + (i * line_height),
-                text=value, fill="#000000", font=("Arial", 12), anchor="w"
+                center_x, info_y_start + (i * line_height),
+                text=detail_text, fill="#000000", font=("Arial", 12, "bold"), anchor="center"
             )
         
         # Amount display
         amount_y = info_y_start + (len(details) * line_height) + 20
         self.canvas.create_text(
-            254.0, amount_y,
+            center_x, amount_y,
             text=f"Total Amount: ₱{self.request_data['total_amount']:.2f}",
             fill="#792D1B",
             font=("Arial", 16, "bold"),
@@ -162,13 +163,15 @@ class PaymentWindow:
         
     def _create_payment_methods(self):
         """Create payment method selection"""
-        method_y = 320
+        method_y = 330
+        center_x = 254.0  # Center of the window
+        
         self.canvas.create_text(
-            50.0, method_y,
+            center_x, method_y,
             text="Payment Method:",
             fill="#000000",
             font=("Arial", 12, "bold"),
-            anchor="w"
+            anchor="center"
         )
         
         self.payment_method = tk.StringVar(value="online")
@@ -181,9 +184,9 @@ class PaymentWindow:
             value="online",
             bg="#FFFFFF",
             font=("Arial", 10),
-            anchor="w"
+            anchor="center"
         )
-        online_radio.place(x=50, y=radio_y, width=400, height=25)
+        online_radio.place(x=54, y=radio_y, width=400, height=25)
         
         cash_radio = tk.Radiobutton(
             self.window,
@@ -192,13 +195,13 @@ class PaymentWindow:
             value="cash",
             bg="#FFFFFF",
             font=("Arial", 10),
-            anchor="w"
+            anchor="center"
         )
-        cash_radio.place(x=50, y=radio_y + 30, width=400, height=25)
+        cash_radio.place(x=54, y=radio_y + 30, width=400, height=25)
         
     def _create_payment_button(self):
         """Create payment button"""
-        button_y = 420
+        button_y = 440
         try:
             pay_button_img = tk.PhotoImage(file=self._relative_to_assets("button_pay.png"))
             self.pay_button = tk.Button(
@@ -234,9 +237,10 @@ class PaymentWindow:
             text="",
             fg="#792D1B",
             bg="#FFFFFF",
-            font=("Arial", 10, "italic")
+            font=("Arial", 10, "italic"),
+            anchor="center"
         )
-        self.status_label.place(x=50, y=button_y + 70, width=400, height=20)
+        self.status_label.place(x=54, y=button_y + 70, width=400, height=20)
         
     def process_payment(self):
         """Process payment based on selected method"""
