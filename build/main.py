@@ -127,7 +127,7 @@ class DocumentRequestSystem:
                     self.db_connection.close()
                 self.db_connection = mysql.connector.connect(**DB_CONFIG)
             else:
-                messagebox.showerror("Error", "Failead to initialize database.")
+                messagebox.showerror("Error", "Failed to initialize database.")
                 self.root.quit()
         except ImportError as e:
             messagebox.showerror("Error", f"Cannot import database initializer: {e}")
