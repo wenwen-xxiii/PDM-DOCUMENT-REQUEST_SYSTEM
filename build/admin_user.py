@@ -1,6 +1,6 @@
 # adminuser.py - Admin User Manager for User Management
 from pathlib import Path
-from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel, Checkbutton
+from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel, Checkbutton, BooleanVar
 import mysql.connector
 from mysql.connector import Error
 import sys
@@ -471,7 +471,7 @@ class AdminUserManager:
             relief="flat",
             command=dialog.destroy
         )
-        close_button.place(x=200, y=520, width=100, height=35)
+        close_button.place(x=200, y=500, width=100, height=35)
 
     def edit_user(self, user):
         """Open edit user dialog"""
@@ -532,7 +532,7 @@ class AdminUserManager:
         # Form fields - centered layout like payment window
         center_x = 250.0  # Center of the dialog
         field_y_start = 130
-        field_spacing = 50
+        field_spacing = 70
         
         # Username field
         canvas.create_text(
@@ -569,10 +569,16 @@ class AdminUserManager:
             center_x, field_y_start + (field_spacing * 3),
             text="Email Verified:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
         )
-        verified_var = StringVar()
-        verified_check = Checkbutton(dialog, variable=verified_var, font=("Inter", 10), bg="#FFFFFF")
+        verified_var = BooleanVar(value=user['is_verified'])  # Change to BooleanVar
+        verified_check = Checkbutton(
+            dialog, 
+            variable=verified_var, 
+            font=("Inter", 10), 
+            bg="#FFFFFF",
+            onvalue=True,
+            offvalue=False
+        )
         verified_check.place(x=center_x - 10, y=field_y_start + (field_spacing * 3) + 20, width=20, height=20)
-        verified_var.set("1" if user['is_verified'] else "0")
         
         # Password fields
         canvas.create_text(
@@ -594,19 +600,26 @@ class AdminUserManager:
             center_x, field_y_start + (field_spacing * 6),
             text="Update Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
         )
-        update_password_var = StringVar()
-        update_password_check = Checkbutton(dialog, text="Enable Password Update", variable=update_password_var, 
-                                          font=("Inter", 10), bg="#FFFFFF")
-        update_password_check.place(x=center_x - 80, y=field_y_start + (field_spacing * 6) + 20, width=160, height=20)
+        update_password_var = BooleanVar(value=True)  # Changed to True to make it checked by default
+        update_password_check = Checkbutton(
+            dialog, 
+            text="Enable Password Update", 
+            variable=update_password_var, 
+            font=("Inter", 10), 
+            bg="#FFFFFF",
+            onvalue=True,
+            offvalue=False
+        )
+        update_password_check.place(x=center_x - 90, y=field_y_start + (field_spacing * 6) + 20, width=180, height=20)
         
         # Buttons
         def save_user():
             email = email_entry.get().strip()
             user_type = user_type_var.get()
-            is_verified = verified_var.get() == "1"
+            is_verified = verified_var.get()  # Now directly using Boolean value
             new_password = password_entry.get().strip()
             confirm_password = confirm_password_entry.get().strip()
-            update_password = update_password_var.get() == "1"
+            update_password = update_password_var.get()  # Now directly using Boolean value
             
             if not email:
                 messagebox.showerror("Error", "Email is required")
@@ -639,9 +652,9 @@ class AdminUserManager:
         
         # Save and Cancel buttons
         Button(dialog, text="Save", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
-               relief="flat", command=save_user).place(x=150, y=620, width=100, height=35)
+               relief="flat", command=save_user).place(x=140, y=600, width=100, height=35)
         Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=cancel_form).place(x=270, y=620, width=100, height=35)
+               relief="flat", command=cancel_form).place(x=260, y=600, width=100, height=35)
 
     def update_user(self, user_id, email, user_type, is_verified, new_password=None):
         """Update user information in database"""
@@ -659,7 +672,7 @@ class AdminUserManager:
                 
                 cursor.execute("""
                     UPDATE users 
-                    SET email = %s, user_type = %s, is_verified = %s, password = %s
+                    SET email = %s, user_type = %s, is_verified = %s, password_hash = %s
                     WHERE user_id = %s
                 """, (email, user_type, is_verified, hashed_password, user_id))
             else:

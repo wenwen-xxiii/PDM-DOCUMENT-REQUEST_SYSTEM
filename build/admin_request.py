@@ -126,15 +126,15 @@ class AdminRequestManager:
             bg="#FFFFFF",
             fg="#000716",
             highlightthickness=1,
-            font=("Inter", 10)
+            font=("Inter", 12)
         )
         # Place near the top-right inside the content frame, avoiding scrollbar
         # Content area width ~895; leave room for scrollbar and padding
         self.search_entry.place(x=525, y=18, width=350, height=30)
-        self.search_entry.insert(0, "Search...")
+        self.search_entry.insert(0, "Search request...")
         # Simple placeholder behavior
         def _on_focus_in(event):
-            if self.search_entry.get() == "Search...":
+            if self.search_entry.get() == "Search request...":
                 self.search_entry.delete(0, "end")
         def _on_focus_out(event):
             if not self.search_entry.get().strip():
