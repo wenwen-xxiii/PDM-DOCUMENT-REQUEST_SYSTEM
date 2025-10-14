@@ -406,23 +406,63 @@ class AdminBillingManager:
         """Open payment details dialog"""
         dialog = Toplevel(self.parent)
         dialog.title(f"Payment Details - {payment['reference_number'] or 'No Reference'}")
-        dialog.geometry("500x600")
+        dialog.geometry("500x700")
         dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
         
-        # Center the dialog
+        # Center the dialog on screen
         dialog.transient(self.parent)
         dialog.grab_set()
         
-        # Payment details
-        details_frame = Frame(dialog, bg="#FFFFFF")
-        details_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 700
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
         
-        # Title
-        title_label = Label(details_frame, text="Payment Details", 
-                           font=("Inter", 16, "bold"), bg="#FFFFFF", fg="#792D1B")
-        title_label.pack(pady=(0, 20))
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
         
-        # Payment information
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=700,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            250.0, 65.0,
+            text="Payment Details",
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 650.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # Payment information - centered layout
+        info_y_start = 130
+        line_height = 35
+        center_x = 250.0  # Center of the dialog
+        
         info_labels = [
             ("Payment ID:", str(payment['payment_id'])),
             ("Request Number:", payment['request_number']),
@@ -438,21 +478,25 @@ class AdminBillingManager:
             ("Paid At:", payment['paid_at'].strftime('%Y-%m-%d %H:%M:%S') if payment['paid_at'] else "N/A"),
         ]
         
-        for label_text, value_text in info_labels:
-            frame = Frame(details_frame, bg="#FFFFFF")
-            frame.pack(fill="x", pady=5)
-            
-            label = Label(frame, text=label_text, font=("Inter", 10, "bold"), 
-                         bg="#FFFFFF", fg="#333333", width=20, anchor="w")
-            label.pack(side="left")
-            
-            value = Label(frame, text=value_text, font=("Inter", 10), 
-                         bg="#FFFFFF", fg="#666666", anchor="w")
-            value.pack(side="left", padx=(10, 0))
+        for i, (label_text, value_text) in enumerate(info_labels):
+            # Create centered text for each detail
+            detail_text = f"{label_text} {value_text}"
+            canvas.create_text(
+                center_x, info_y_start + (i * line_height),
+                text=detail_text, fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+            )
         
         # Close button
-        Button(dialog, text="Close", font=("Inter", 10, "bold"), bg="#6c757d", fg="#FFFFFF", 
-               relief="flat", command=dialog.destroy).pack(pady=20)
+        close_button = Button(
+            dialog,
+            text="Close",
+            font=("Inter", 12, "bold"),
+            bg="#6c757d",
+            fg="#FFFFFF",
+            relief="flat",
+            command=dialog.destroy
+        )
+        close_button.place(x=200, y=600, width=100, height=35)
 
     def approve_payment(self, payment):
         """Approve a pending payment"""
