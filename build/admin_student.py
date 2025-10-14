@@ -452,7 +452,328 @@ class AdminStudentManager:
 
     def import_csv_file(self):
         """Open CSV import dialog"""
-        messagebox.showinfo("Import CSV", "CSV Import functionality will be implemented here")
+        from tkinter import filedialog
+        import csv
+        
+        # Open file dialog to select CSV file
+        file_path = filedialog.askopenfilename(
+            title="Select CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            # Read CSV file
+            with open(file_path, 'r', encoding='utf-8') as file:
+                csv_reader = csv.DictReader(file)
+                rows = list(csv_reader)
+            
+            if not rows:
+                messagebox.showerror("Error", "CSV file is empty")
+                return
+            
+            # Show preview dialog
+            self.show_csv_preview(rows, file_path)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to read CSV file: {str(e)}")
+    
+    def show_csv_preview(self, rows, file_path):
+        """Show CSV preview dialog"""
+        dialog = Toplevel(self.parent)
+        dialog.title("CSV Import Preview")
+        dialog.geometry("800x600")
+        dialog.resizable(True, True)
+        dialog.configure(bg="#FCECB7")
+        
+        # Center the dialog
+        dialog.transient(self.parent)
+        dialog.grab_set()
+        
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 800, 600
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Force focus
+        dialog.focus_force()
+        dialog.lift()
+        
+        # Create canvas
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=600,
+            width=800,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 800.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 800.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            400.0, 65.0,
+            text="CSV Import Preview",
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 775.0, 500.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # File info
+        canvas.create_text(
+            400.0, 120.0,
+            text=f"File: {file_path.split('/')[-1]} | Records: {len(rows)}",
+            fill="#000000",
+            font=("Inter", 12, "bold"),
+            anchor="center"
+        )
+        
+        # Create scrollable frame for preview
+        from tkinter import Frame, Scrollbar
+        
+        preview_frame = Frame(dialog, bg="#FFFFFF")
+        preview_frame.place(x=30, y=140, width=740, height=350)
+        
+        # Create scrollbar
+        scrollbar = Scrollbar(preview_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Create text widget for preview
+        from tkinter import Text
+        preview_text = Text(
+            preview_frame,
+            font=("Courier", 9),
+            bg="#FFFFFF",
+            fg="#000000",
+            wrap="none",
+            yscrollcommand=scrollbar.set
+        )
+        preview_text.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=preview_text.yview)
+        
+        # Show first 10 rows as preview
+        preview_content = "Column Headers:\n"
+        if rows:
+            headers = list(rows[0].keys())
+            preview_content += " | ".join(headers) + "\n\n"
+            preview_content += "Sample Data (first 10 rows):\n"
+            
+            for i, row in enumerate(rows[:10]):
+                values = [str(row.get(header, '')) for header in headers]
+                preview_content += f"Row {i+1}: {' | '.join(values)}\n"
+            
+            if len(rows) > 10:
+                preview_content += f"\n... and {len(rows) - 10} more rows"
+        
+        preview_text.insert("1.0", preview_content)
+        preview_text.config(state="disabled")
+        
+        # Import options
+        canvas.create_text(
+            400.0, 510.0,
+            text="Import Options:",
+            fill="#000000",
+            font=("Inter", 12, "bold"),
+            anchor="center"
+        )
+        
+        # Checkboxes for import options
+        from tkinter import Checkbutton, BooleanVar
+        
+        skip_duplicates_var = BooleanVar(value=True)
+        skip_duplicates_check = Checkbutton(
+            dialog,
+            text="Skip duplicate student numbers",
+            variable=skip_duplicates_var,
+            font=("Inter", 10),
+            bg="#FCECB7"
+        )
+        skip_duplicates_check.place(x=50, y=530, width=200, height=20)
+        
+        create_accounts_var = BooleanVar(value=True)
+        create_accounts_check = Checkbutton(
+            dialog,
+            text="Create user accounts for students",
+            variable=create_accounts_var,
+            font=("Inter", 10),
+            bg="#FCECB7"
+        )
+        create_accounts_check.place(x=300, y=530, width=200, height=20)
+        
+        # Buttons
+        def start_import():
+            dialog.destroy()
+            self.process_csv_import(rows, skip_duplicates_var.get(), create_accounts_var.get())
+        
+        def cancel_import():
+            dialog.destroy()
+        
+        Button(dialog, text="Import", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
+               relief="flat", command=start_import).place(x=300, y=560, width=100, height=35)
+        Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
+               relief="flat", command=cancel_import).place(x=420, y=560, width=100, height=35)
+    
+    def process_csv_import(self, rows, skip_duplicates=True, create_accounts=True):
+        """Process CSV import"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
+            
+            cursor = connection.cursor()
+            
+            imported_count = 0
+            skipped_count = 0
+            error_count = 0
+            errors = []
+            
+            # Progress dialog
+            progress_dialog = Toplevel(self.parent)
+            progress_dialog.title("Importing CSV")
+            progress_dialog.geometry("400x200")
+            progress_dialog.resizable(False, False)
+            progress_dialog.configure(bg="#FCECB7")
+            
+            # Center progress dialog
+            progress_dialog.update_idletasks()
+            width, height = 400, 200
+            screen_width = progress_dialog.winfo_screenwidth()
+            screen_height = progress_dialog.winfo_screenheight()
+            x = (screen_width - width) // 2
+            y = (screen_height - height) // 2
+            progress_dialog.geometry(f'{width}x{height}+{x}+{y}')
+            
+            progress_dialog.transient(self.parent)
+            progress_dialog.grab_set()
+            
+            # Progress label
+            progress_label = Label(
+                progress_dialog,
+                text="Processing CSV import...",
+                font=("Inter", 12, "bold"),
+                bg="#FCECB7",
+                fg="#792D1B"
+            )
+            progress_label.pack(pady=20)
+            
+            # Progress bar (simple text-based)
+            progress_text = Label(
+                progress_dialog,
+                text="",
+                font=("Inter", 10),
+                bg="#FCECB7",
+                fg="#000000"
+            )
+            progress_text.pack(pady=10)
+            
+            progress_dialog.update()
+            
+            for i, row in enumerate(rows):
+                try:
+                    # Update progress
+                    progress_text.config(text=f"Processing row {i+1} of {len(rows)}")
+                    progress_dialog.update()
+                    
+                    # Extract data from CSV row
+                    student_number = str(row.get('student_number', '')).strip()
+                    first_name = str(row.get('first_name', '')).strip()
+                    last_name = str(row.get('last_name', '')).strip()
+                    middle_name = str(row.get('middle_name', '')).strip()
+                    course = str(row.get('course', '')).strip()
+                    year_level = str(row.get('year_level', '')).strip()
+                    contact_number = str(row.get('contact_number', '')).strip()
+                    address = str(row.get('address', '')).strip()
+                    email = str(row.get('email', '')).strip()
+                    
+                    # Validate required fields
+                    if not all([student_number, first_name, last_name, course, year_level]):
+                        errors.append(f"Row {i+1}: Missing required fields")
+                        error_count += 1
+                        continue
+                    
+                    # Check for duplicates if skip_duplicates is True
+                    if skip_duplicates:
+                        cursor.execute("SELECT student_id FROM students WHERE student_number = %s", (student_number,))
+                        if cursor.fetchone():
+                            errors.append(f"Row {i+1}: Student number {student_number} already exists")
+                            skipped_count += 1
+                            continue
+                    
+                    # Create user account if requested
+                    user_id = None
+                    if create_accounts and email:
+                        try:
+                            cursor.execute("""
+                                INSERT INTO users (username, email, password_hash, user_type, is_active, is_verified, created_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (student_number, email, 'default_password_hash', 'student', True, False, datetime.now()))
+                            user_id = cursor.lastrowid
+                        except Exception as e:
+                            # User might already exist, continue without account
+                            pass
+                    
+                    # Insert student record
+                    cursor.execute("""
+                        INSERT INTO students (user_id, student_number, first_name, last_name, middle_name, 
+                                           course, year_level, contact_number, address, enrollment_status, 
+                                           date_enrolled, has_obligations, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (user_id, student_number, first_name, last_name, middle_name, course, year_level, 
+                          contact_number, address, 'Enrolled', datetime.now(), False, datetime.now()))
+                    
+                    imported_count += 1
+                    
+                except Exception as e:
+                    errors.append(f"Row {i+1}: {str(e)}")
+                    error_count += 1
+            
+            # Commit changes
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            # Close progress dialog
+            progress_dialog.destroy()
+            
+            # Show results
+            result_message = f"CSV Import Complete!\n\n"
+            result_message += f"✅ Imported: {imported_count} students\n"
+            result_message += f"⏭️ Skipped: {skipped_count} duplicates\n"
+            result_message += f"❌ Errors: {error_count} rows\n\n"
+            
+            if errors:
+                result_message += "Errors:\n" + "\n".join(errors[:10])
+                if len(errors) > 10:
+                    result_message += f"\n... and {len(errors) - 10} more errors"
+            
+            messagebox.showinfo("Import Results", result_message)
+            
+            # Refresh the student list
+            self.load_students()
+            self.update_display()
+            
+        except Exception as e:
+            if 'progress_dialog' in locals():
+                progress_dialog.destroy()
+            messagebox.showerror("Import Error", f"Failed to import CSV: {str(e)}")
 
     def open_student_form(self, student=None):
         """Open student form dialog"""
