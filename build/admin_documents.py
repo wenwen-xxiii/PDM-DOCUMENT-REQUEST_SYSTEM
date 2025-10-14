@@ -36,7 +36,7 @@ class AdminDocumentManager:
         self.filtered_documents = []
         self.search_query = ""
         self.current_page = 1
-        self.documents_per_page = 9
+        self.documents_per_page = 8
         
         # UI element storage
         self.images = []
@@ -69,6 +69,9 @@ class AdminDocumentManager:
         # Create search bar (top-right)
         self.create_searchbar()
         
+        # Create title label (top left)
+        self.create_title_label()
+        
         # Create add document type button (above table header)
         self.create_add_button()
         
@@ -79,7 +82,7 @@ class AdminDocumentManager:
         self.create_navigation_controls()
         
     def create_add_button(self):
-        """Create Add Document Type button above the table header"""
+        """Create Add Document Type button below the title label"""
         self.button_add_document = Button(
             self.parent,
             text="Add Document Type",
@@ -89,35 +92,45 @@ class AdminDocumentManager:
             relief="flat",
             command=self.add_document_type
         )
-        # Position above the table header (y=10-50, so place at y=5)
-        self.button_add_document.place(x=20, y=10, width=150, height=35)
+        # Position below the title label (y=15 + height=18 + spacing=5 = y=38)
+        self.button_add_document.place(x=725, y=60, width=150, height=35)
         
     def create_searchbar(self):
-        """Create a search entry on the top-right and bind filtering"""
-        # Search entry sized to fit within the right side of header area
+        """Create a search entry at the top right"""
+        # Search entry positioned at the top right
         self.search_entry = Entry(
             self.parent,
             bd=1,
             bg="#FFFFFF",
             fg="#000716",
             highlightthickness=1,
-            font=("Inter", 10)
+            font=("Inter", 12)
         )
-        # Place near the top-right inside the content frame, avoiding scrollbar
-        # Content area width ~895; leave room for scrollbar and padding
-        self.search_entry.place(x=640, y=17, width=220, height=24)
-        self.search_entry.insert(0, "Search...")
+        # Place at the top right
+        self.search_entry.place(x=525, y=18, width=350, height=30)
+        self.search_entry.insert(0, "Search documents...")
         # Simple placeholder behavior
         def _on_focus_in(event):
-            if self.search_entry.get() == "Search...":
+            if self.search_entry.get() == "Search documents...":
                 self.search_entry.delete(0, "end")
         def _on_focus_out(event):
             if not self.search_entry.get().strip():
                 self.search_entry.delete(0, "end")
-                self.search_entry.insert(0, "Search...")
+                self.search_entry.insert(0, "Search documents...")
         self.search_entry.bind("<FocusIn>", _on_focus_in)
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
+
+    def create_title_label(self):
+        """Create a title label in the top left"""
+        self.title_label = Label(
+            self.parent,
+            text="Document Management",
+            font=("Inter", 18, "bold"),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.title_label.place(x=20, y=15)
 
     def create_table_headers(self):
         """Create table header labels for document types"""
@@ -133,11 +146,11 @@ class AdminDocumentManager:
         ]
         
         # Header background - dark brown like in the image
-        self.canvas.create_rectangle(20, 50, 875, 90, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(20, 110, 875, 150, fill="#792D1B", outline="")
         
         for x, text, anchor in headers:
             self.canvas.create_text(
-                x, 70, 
+                x, 130, 
                 anchor=anchor, 
                 text=text, 
                 fill="#FFFFFF", 
@@ -262,7 +275,7 @@ class AdminDocumentManager:
         """Handle search text changes and filter the list"""
         query = self.search_entry.get().strip()
         # Ignore placeholder
-        if query == "Search...":
+        if query == "Search documents...":
             query = ""
         self.search_query = query.lower()
         self.apply_search_filter()
@@ -292,7 +305,7 @@ class AdminDocumentManager:
 
     def create_table_row(self, row_index, document):
         """Create a table row with data and action buttons"""
-        y_position = 100 + (row_index * 45)
+        y_position = 160 + (row_index * 45)
         
         # Row background (alternating colors)
         fill_color = "#FFFFFF" if row_index % 2 == 0 else "#F8F8F8"

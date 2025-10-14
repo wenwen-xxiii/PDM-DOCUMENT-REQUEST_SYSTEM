@@ -123,7 +123,7 @@ class AdminUserManager:
             (120.0, "Username", "center"),
             (300.0, "Email", "center"),
             (500.0, "User Type", "center"),
-            (640.0, "Status", "center"),
+            (620.0, "Status", "center"),
             (770.0, "Actions", "center")
         ]
         
@@ -303,7 +303,7 @@ class AdminUserManager:
             (120.0, user['username'][:15] + "..." if len(user['username']) > 15 else user['username'], "center"),
             (300.0, user['email'][:25] + "..." if len(user['email']) > 25 else user['email'], "center"),
             (500.0, user['user_type'].title(), "center"),
-            (640.0, status_text, "center")
+            (620.0, status_text, "center")
         ]
         
         for x, text, anchor in text_configs:

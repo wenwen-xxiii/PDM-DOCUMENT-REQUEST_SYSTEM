@@ -101,8 +101,8 @@ class AdminRequestManager:
             (380.0, "Document", "center"),
             (470.0, "Qty", "center"),
             (520.0, "Date", "center"),
-            (600.0, "Status", "center"),
-            (760.0, "Actions", "center")
+            (620.0, "Status", "center"),
+            (770.0, "Actions", "center")
         ]
         
         # Header background - dark brown like in the image
@@ -139,7 +139,7 @@ class AdminRequestManager:
         def _on_focus_out(event):
             if not self.search_entry.get().strip():
                 self.search_entry.delete(0, "end")
-                self.search_entry.insert(0, "Search...")
+                self.search_entry.insert(0, "Search request...")
         self.search_entry.bind("<FocusIn>", _on_focus_in)
         self.search_entry.bind("<FocusOut>", _on_focus_out)
         self.search_entry.bind("<KeyRelease>", self.on_search_change)
@@ -340,7 +340,7 @@ class AdminRequestManager:
             (380.0, request['document_code'], "center"),
             (470.0, str(request['quantity']), "center"),
             (520.0, formatted_date, "center"),
-            (600.0, self.format_status_display_compact(request['status'], request['payment_status']), "center")
+            (620.0, self.format_status_display_compact(request['status'], request['payment_status']), "center")
         ]
         
         for x, text, anchor in text_configs:
@@ -392,7 +392,7 @@ class AdminRequestManager:
             relief="flat",
             command=lambda r=request: self.view_request(r)
         )
-        view_button.place(x=680, y=y_position + 8, width=50, height=25)
+        view_button.place(x=690, y=y_position + 8, width=50, height=25)
         button_widgets.append(view_button)
         
         status = request['status']
@@ -400,7 +400,7 @@ class AdminRequestManager:
         
         # Action button position (centered in the actions column)
         # The actions column spans from ~690 to ~870, so center is around 780
-        action_button_center_x = 765
+        action_button_center_x = 775
         
         # Conditional button display:
         if status == 'payment_pending' and payment_status == 'pending':
@@ -474,7 +474,7 @@ class AdminRequestManager:
             command=lambda r=request: self.upload_document(r),
             state="normal" if upload_enabled else "disabled"
         )
-        upload_button.place(x=802, y=y_position + 8, width=50, height=25)
+        upload_button.place(x=812, y=y_position + 8, width=50, height=25)
         button_widgets.append(upload_button)
         
         self.row_widgets.append(button_widgets)
