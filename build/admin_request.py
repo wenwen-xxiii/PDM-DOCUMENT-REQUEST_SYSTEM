@@ -14,6 +14,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
 from utils import email_service
+from admin_upload_docu import AdminUploadDocumentWindow
+from view_docu_attachment import DocumentAttachmentViewer
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -854,7 +856,7 @@ class AdminRequestManager:
             return False
 
     def view_request(self, request):
-        """View request details"""
+        """View request details and attachments"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -884,32 +886,153 @@ class AdminRequestManager:
             """, (request['request_id'],))
             
             detailed_request = cursor.fetchone()
+            
+            # Check for attachments
+            cursor.execute("""
+                SELECT COUNT(*) as attachment_count 
+                FROM document_attachments 
+                WHERE request_id = %s
+            """, (request['request_id'],))
+            
+            attachment_result = cursor.fetchone()
+            attachment_count = attachment_result['attachment_count'] if attachment_result else 0
+            
             cursor.close()
             connection.close()
             
             if detailed_request:
-                from requestform import DocumentRequestWindow
+                # Show options dialog
+                from tkinter import Toplevel, Label, Button
                 
-                def dummy_callback():
-                    pass
+                options_dialog = Toplevel(self.parent)
+                options_dialog.title("View Request Options")
+                options_dialog.geometry("400x200")
+                options_dialog.configure(bg="#FCECB7")
+                options_dialog.transient(self.parent)
+                options_dialog.grab_set()
                 
-                request_window = DocumentRequestWindow(
-                    parent=self.parent,
-                    student_id=detailed_request['student_id'],
-                    show_dashboard_callback=dummy_callback
-                )
+                # Center the dialog
+                options_dialog.update_idletasks()
+                width, height = 400, 200
+                screen_width = options_dialog.winfo_screenwidth()
+                screen_height = options_dialog.winfo_screenheight()
+                x = (screen_width - width) // 2
+                y = (screen_height - height) // 2
+                options_dialog.geometry(f'{width}x{height}+{x}+{y}')
                 
-                self.populate_request_form(request_window, detailed_request)
+                # Header
+                Label(
+                    options_dialog,
+                    text="View Request Options",
+                    font=("Inter", 16, "bold"),
+                    bg="#FCECB7",
+                    fg="#792D1B"
+                ).pack(pady=20)
+                
+                # Request info
+                Label(
+                    options_dialog,
+                    text=f"Request #{detailed_request['request_number']}",
+                    font=("Inter", 12),
+                    bg="#FCECB7",
+                    fg="#000000"
+                ).pack(pady=5)
+                
+                Label(
+                    options_dialog,
+                    text=f"Student: {detailed_request['student_name']}",
+                    font=("Inter", 10),
+                    bg="#FCECB7",
+                    fg="#666666"
+                ).pack(pady=2)
+                
+                # Buttons frame
+                buttons_frame = Frame(options_dialog, bg="#FCECB7")
+                buttons_frame.pack(pady=20)
+                
+                # View Details button
+                Button(
+                    buttons_frame,
+                    text="📋 View Details",
+                    font=("Inter", 10),
+                    bg="#007BFF",
+                    fg="#FFFFFF",
+                    relief="flat",
+                    command=lambda: [options_dialog.destroy(), self.view_request_details(detailed_request)]
+                ).pack(side="left", padx=10)
+                
+                # View Attachments button (if available)
+                if attachment_count > 0:
+                    Button(
+                        buttons_frame,
+                        text=f"📎 View Attachments ({attachment_count})",
+                        font=("Inter", 10),
+                        bg="#28A745",
+                        fg="#FFFFFF",
+                        relief="flat",
+                        command=lambda: [options_dialog.destroy(), self.view_attachments(request['request_id'])]
+                    ).pack(side="left", padx=10)
+                else:
+                    Button(
+                        buttons_frame,
+                        text="📎 No Attachments",
+                        font=("Inter", 10),
+                        bg="#6C757D",
+                        fg="#FFFFFF",
+                        relief="flat",
+                        state="disabled"
+                    ).pack(side="left", padx=10)
+                
+                # Close button
+                Button(
+                    buttons_frame,
+                    text="✕ Close",
+                    font=("Inter", 10),
+                    bg="#DC3545",
+                    fg="#FFFFFF",
+                    relief="flat",
+                    command=options_dialog.destroy
+                ).pack(side="left", padx=10)
                 
             else:
                 messagebox.showerror("Error", "Could not load request details")
                 
         except Error as e:
             messagebox.showerror("Database Error", f"Failed to load request details: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open request options: {str(e)}")
+    
+    def view_request_details(self, detailed_request):
+        """View request details in form format"""
+        try:
+            from requestform import DocumentRequestWindow
+            
+            def dummy_callback():
+                pass
+            
+            request_window = DocumentRequestWindow(
+                parent=self.parent,
+                student_id=detailed_request['student_id'],
+                show_dashboard_callback=dummy_callback
+            )
+            
+            self.populate_request_form(request_window, detailed_request)
+            
         except ImportError:
             messagebox.showerror("Error", "Request form module not found")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open request form: {str(e)}")
+    
+    def view_attachments(self, request_id):
+        """View document attachments"""
+        try:
+            DocumentAttachmentViewer(
+                parent=self.parent,
+                request_id=request_id,
+                get_db_connection=self.get_db_connection
+            )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open attachment viewer: {str(e)}")
     
     def populate_request_form(self, request_window, request_data):
         """Populate the request form with existing data in read-only mode"""

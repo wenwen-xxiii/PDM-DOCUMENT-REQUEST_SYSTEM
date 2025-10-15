@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_CONFIG
 from requestform import DocumentRequestWindow
 from payment_window import PaymentWindow
+from view_docu_attachment import DocumentAttachmentViewer
 
 class DocumentWindow:
     def __init__(self, parent, user_data=None, user_type=None, get_db_connection=None, navigation_callbacks=None):
@@ -554,20 +555,51 @@ class DocumentWindow:
         self.request_window.run()
 
     def view_document(self, row_index):
-        """View document details"""
+        """View document details and attachments"""
         start_idx = (self.current_page - 1) * self.requests_per_page
         actual_index = start_idx + row_index
         
         if actual_index < len(self.document_requests):
             request = self.document_requests[actual_index]
-            messagebox.showinfo(
-                "View Document", 
-                f"Document Details:\n\n"
-                f"Request Number: {request['request_number']}\n"
-                f"Document: {request['document_name']}\n"
-                f"Status: {request['status'].title()}\n"
-                f"Release Date: {request['request_release_date'].strftime('%Y-%m-%d')}"
-            )
+            
+            # Check if document has attachments
+            try:
+                connection = self.get_db_connection()
+                if connection:
+                    cursor = connection.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) as attachment_count 
+                        FROM document_attachments 
+                        WHERE request_id = %s
+                    """, (request['request_id'],))
+                    
+                    result = cursor.fetchone()
+                    attachment_count = result[0] if result else 0
+                    cursor.close()
+                    connection.close()
+                    
+                    if attachment_count > 0:
+                        # Open attachment viewer
+                        DocumentAttachmentViewer(
+                            parent=self.parent,
+                            request_id=request['request_id'],
+                            get_db_connection=self.get_db_connection
+                        )
+                    else:
+                        # Show basic document info if no attachments
+                        messagebox.showinfo(
+                            "View Document", 
+                            f"Document Details:\n\n"
+                            f"Request Number: {request['request_number']}\n"
+                            f"Document: {request['document_name']}\n"
+                            f"Status: {request['status'].title()}\n"
+                            f"Release Date: {request['request_release_date'].strftime('%Y-%m-%d')}\n\n"
+                            f"No attachments available for this request."
+                        )
+                else:
+                    messagebox.showerror("Error", "Could not connect to database")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to check attachments: {str(e)}")
 
     def make_payment(self, row_index):
         """Process payment for document request"""
