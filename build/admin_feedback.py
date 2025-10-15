@@ -11,6 +11,7 @@ from tkinter import (
     Scrollbar,
     Toplevel,
     Text,
+    PhotoImage,
 )
 import mysql.connector
 from mysql.connector import Error
@@ -141,9 +142,9 @@ class AdminFeedbackManager:
             (120.0, "Request No.", "center"),
             (240.0, "Student", "center"),
             (360.0, "Document", "center"),
-            (480.0, "Rating", "center"),
-            (560.0, "Date", "center"),
-            (640.0, "Status", "center"),
+            (440.0, "Rating", "center"),
+            (520.0, "Date", "center"),
+            (600.0, "Status", "center"),
             (770.0, "Actions", "center"),
         ]
 
@@ -366,9 +367,9 @@ class AdminFeedbackManager:
                 "center",
             ),
             (360.0, feedback["document_code"], "center"),
-            (480.0, rating_stars, "center"),
-            (560.0, formatted_date, "center"),
-            (640.0, status_text, "center"),
+            (440.0, rating_stars, "center"),
+            (520.0, formatted_date, "center"),
+            (600.0, status_text, "center"),
         ]
 
         for x, text, anchor in text_configs:
@@ -401,14 +402,14 @@ class AdminFeedbackManager:
         # View Details button - always available
         view_button = Button(
             self.parent,
-            text="View",
+            text="View Feedback",
             font=("Inter", 9),
             bg="#007BFF",
             fg="#FFFFFF",
             relief="flat",
             command=lambda f=feedback: self.view_feedback_details(f),
         )
-        view_button.place(x=680, y=y_position + 8, width=50, height=25)
+        view_button.place(x=660, y=y_position + 8, width=100, height=25)
         button_widgets.append(view_button)
 
         # Respond/View Response button
@@ -425,7 +426,7 @@ class AdminFeedbackManager:
                 relief="flat",
                 command=lambda f=feedback: self.view_response(f),
             )
-            view_response_button.place(x=740, y=y_position + 8, width=80, height=25)
+            view_response_button.place(x=770, y=y_position + 8, width=100, height=25)
             button_widgets.append(view_response_button)
 
         else:
@@ -439,35 +440,74 @@ class AdminFeedbackManager:
                 relief="flat",
                 command=lambda f=feedback: self.respond_to_feedback(f),
             )
-            respond_button.place(x=740, y=y_position + 8, width=60, height=25)
+            respond_button.place(x=770, y=y_position + 8, width=100, height=25)
             button_widgets.append(respond_button)
 
         self.row_widgets.append(button_widgets)
 
     def view_feedback_details(self, feedback):
-        """Open feedback details dialog"""
+        """Open feedback details dialog with payment_window.py layout style"""
         dialog = Toplevel(self.parent)
         dialog.title(f"Feedback Details - {feedback['request_number']}")
-        dialog.geometry("600x700")
+        dialog.geometry("600x720")
+        dialog.configure(bg="#FCECB7")
         dialog.resizable(False, False)
 
         # Center the dialog
         dialog.transient(self.parent)
         dialog.grab_set()
+        self._center_feedback_dialog(dialog)
 
-        # Feedback details
-        details_frame = Frame(dialog, bg="#FFFFFF")
-        details_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        # Title
-        title_label = Label(
-            details_frame,
-            text="Feedback Details",
-            font=("Inter", 16, "bold"),
-            bg="#FFFFFF",
-            fg="#792D1B",
+        # Create main canvas
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=720,
+            width=600,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
         )
-        title_label.pack(pady=(0, 20))
+        canvas.place(x=0, y=0)
+
+        # Create header section
+        self._create_feedback_header(canvas, dialog)
+
+        # Create content section
+        self._create_feedback_content(canvas, feedback)
+
+    def _center_feedback_dialog(self, dialog):
+        """Center the feedback dialog on screen"""
+        dialog.update_idletasks()
+        width, height = 600, 720
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+
+    def _create_feedback_header(self, canvas, dialog):
+        """Create header section matching payment_window.py style"""
+        # Header rectangle
+        canvas.create_rectangle(0.0, 0.0, 600.0, 98.0, fill="#792D1B", outline="")
+        
+        # Yellow header strip
+        canvas.create_rectangle(0.0, 57.0, 600.0, 99.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            300.0, 78.0,
+            text="Feedback Details",
+            fill="#000000",
+            font=("Arial", 16, "bold"),
+            anchor="center"
+        )
+
+    def _create_feedback_content(self, canvas, feedback):
+        """Create feedback content section"""
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 120.0, 575.0, 650.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
 
         # Student name (or Anonymous)
         student_display = (
@@ -477,8 +517,12 @@ class AdminFeedbackManager:
         # Rating display
         rating_stars = self.format_rating_stars(feedback["rating"])
 
-        # Feedback information
-        info_labels = [
+        # Feedback information - centered layout
+        info_y_start = 150
+        line_height = 30
+        center_x = 300.0  # Center of the dialog (600/2)
+
+        details = [
             ("Request Number:", feedback["request_number"]),
             ("Student:", student_display),
             ("Document:", f"{feedback['document_code']} - {feedback['document_name']}"),
@@ -493,83 +537,66 @@ class AdminFeedbackManager:
             ),
         ]
 
-        for label_text, value_text in info_labels:
-            frame = Frame(details_frame, bg="#FFFFFF")
-            frame.pack(fill="x", pady=3)
-
-            label = Label(
-                frame,
-                text=label_text,
-                font=("Inter", 10, "bold"),
-                bg="#FFFFFF",
-                fg="#333333",
-                width=20,
-                anchor="w",
+        for i, (label, value) in enumerate(details):
+            detail_text = f"{label} {value}"
+            canvas.create_text(
+                center_x, info_y_start + (i * line_height),
+                text=detail_text, fill="#000000", font=("Arial", 12, "bold"), anchor="center"
             )
-            label.pack(side="left")
-
-            value = Label(
-                frame,
-                text=value_text,
-                font=("Inter", 10),
-                bg="#FFFFFF",
-                fg="#666666",
-                anchor="w",
-                wraplength=400,
-            )
-            value.pack(side="left", padx=(10, 0))
 
         # Comments section
-        comments_frame = Frame(details_frame, bg="#FFFFFF")
-        comments_frame.pack(fill="x", pady=(20, 20))
-
-        comments_label = Label(
-            comments_frame,
+        comments_y = info_y_start + (len(details) * line_height) + 20
+        canvas.create_text(
+            center_x, comments_y,
             text="Comments:",
-            font=("Inter", 10, "bold"),
-            bg="#FFFFFF",
-            fg="#333333",
+            fill="#792D1B",
+            font=("Arial", 14, "bold"),
+            anchor="center"
         )
-        comments_label.pack(anchor="w")
+
+        # Comments text area
+        comments_frame = Frame(canvas, bg="#FFFFFF")
+        comments_frame.place(x=50, y=comments_y + 20, width=500, height=120)
 
         comments_text = Text(
             comments_frame,
-            font=("Inter", 10),
-            width=60,
-            height=6,
+            font=("Arial", 10),
             wrap="word",
             state="disabled",
             bg="#F8F8F8",
+            relief="solid",
+            bd=1
         )
-        comments_text.pack(fill="x", pady=(5, 0))
+        comments_text.pack(fill="both", expand=True, padx=10, pady=10)
         comments_text.config(state="normal")
         comments_text.insert("1.0", feedback["comments"] or "No comments provided.")
         comments_text.config(state="disabled")
 
         # Response section (if exists)
+        response_y = comments_y + 160
         if feedback["responded_to"] and feedback["response"]:
-            response_frame = Frame(details_frame, bg="#FFFFFF")
-            response_frame.pack(fill="x", pady=(10, 20))
-
-            response_label = Label(
-                response_frame,
+            canvas.create_text(
+                center_x, response_y,
                 text="Admin Response:",
-                font=("Inter", 10, "bold"),
-                bg="#FFFFFF",
-                fg="#333333",
+                fill="#792D1B",
+                font=("Arial", 14, "bold"),
+                anchor="center"
             )
-            response_label.pack(anchor="w")
+
+            # Response text area
+            response_frame = Frame(canvas, bg="#FFFFFF")
+            response_frame.place(x=50, y=response_y + 20, width=500, height=100)
 
             response_text = Text(
                 response_frame,
-                font=("Inter", 10),
-                width=60,
-                height=4,
+                font=("Arial", 10),
                 wrap="word",
                 state="disabled",
                 bg="#E8F5E8",
+                relief="solid",
+                bd=1
             )
-            response_text.pack(fill="x", pady=(5, 0))
+            response_text.pack(fill="both", expand=True, padx=10, pady=10)
             response_text.config(state="normal")
             response_text.insert("1.0", feedback["response"])
             response_text.config(state="disabled")
@@ -586,25 +613,43 @@ class AdminFeedbackManager:
                 else "N/A"
             )
 
-            response_info = Label(
-                response_frame,
+            canvas.create_text(
+                center_x, response_y + 140,
                 text=f"Responded by: {responder_name} on {response_date}",
-                font=("Inter", 9),
-                bg="#FFFFFF",
-                fg="#666666",
+                fill="#666666",
+                font=("Arial", 10, "italic"),
+                anchor="center"
             )
-            response_info.pack(anchor="w", pady=(5, 0))
+
+            # Close button position
+            button_y = response_y + 180
+        else:
+            # Close button position when no response
+            button_y = comments_y + 180
 
         # Close button
-        Button(
-            dialog,
+        close_button = Button(
+            canvas,
             text="Close",
-            font=("Inter", 10, "bold"),
-            bg="#6c757d",
-            fg="#FFFFFF",
+            font=("Arial", 12, "bold"),
+            bg="#792D1B",
+            fg="#FFDA0C",
             relief="flat",
-            command=dialog.destroy,
-        ).pack(pady=20)
+            command=canvas.master.destroy,
+            width=15,
+            height=2
+        )
+        close_button.place(x=center_x - 75, y=button_y)
+
+    def _relative_to_assets(self, path: str):
+        """Get path to assets"""
+        import os
+        import sys
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+        return os.path.join(base_path, "resources", "assets", path)
 
     def respond_to_feedback(self, feedback):
         """Open respond to feedback dialog"""
@@ -900,40 +945,73 @@ class AdminFeedbackManager:
         print("=" * 60)
 
     def view_response(self, feedback):
-        """View existing response"""
+        """View existing response with payment_window.py layout style"""
         dialog = Toplevel(self.parent)
         dialog.title(f"View Response - {feedback['request_number']}")
-        dialog.geometry("500x400")
+        dialog.geometry("600x700")
+        dialog.configure(bg="#FCECB7")
         dialog.resizable(False, False)
 
         # Center the dialog
         dialog.transient(self.parent)
         dialog.grab_set()
+        self._center_response_dialog(dialog)
 
-        # Title
-        title_label = Label(
+        # Create main canvas
+        canvas = Canvas(
             dialog,
+            bg="#FCECB7",
+            height=700,
+            width=600,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+
+        # Create header section
+        self._create_response_header(canvas, dialog)
+
+        # Create content section
+        self._create_response_content(canvas, feedback)
+
+    def _center_response_dialog(self, dialog):
+        """Center the response dialog on screen"""
+        dialog.update_idletasks()
+        width, height = 600, 700
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+
+    def _create_response_header(self, canvas, dialog):
+        """Create header section matching payment_window.py style"""
+        # Header rectangle
+        canvas.create_rectangle(0.0, 0.0, 600.0, 98.0, fill="#792D1B", outline="")
+        
+        # Yellow header strip
+        canvas.create_rectangle(0.0, 57.0, 600.0, 99.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            300.0, 78.0,
             text="Admin Response",
-            font=("Inter", 14, "bold"),
-            bg="#FFFFFF",
-            fg="#792D1B",
+            fill="#000000",
+            font=("Arial", 16, "bold"),
+            anchor="center"
         )
-        title_label.pack(pady=20)
 
-        # Response content
-        response_text = Text(
-            dialog,
-            font=("Inter", 10),
-            width=50,
-            height=12,
-            wrap="word",
-            state="disabled",
-            bg="#E8F5E8",
+    def _create_response_content(self, canvas, feedback):
+        """Create response content section"""
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 120.0, 575.0, 650.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
         )
-        response_text.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        response_text.config(state="normal")
-        response_text.insert("1.0", feedback["response"] or "No response available.")
-        response_text.config(state="disabled")
+
+        # Response information - centered layout
+        info_y_start = 150
+        line_height = 30
+        center_x = 300.0  # Center of the dialog (600/2)
 
         # Response info
         responder_name = (
@@ -947,25 +1025,61 @@ class AdminFeedbackManager:
             else "N/A"
         )
 
-        info_label = Label(
-            dialog,
-            text=f"Responded by: {responder_name} on {response_date}",
-            font=("Inter", 9),
-            bg="#FFFFFF",
-            fg="#666666",
+        # Request details
+        details = [
+            ("Request Number:", feedback["request_number"]),
+            ("Responded by:", responder_name),
+            ("Response Date:", response_date),
+        ]
+
+        for i, (label, value) in enumerate(details):
+            detail_text = f"{label} {value}"
+            canvas.create_text(
+                center_x, info_y_start + (i * line_height),
+                text=detail_text, fill="#000000", font=("Arial", 12, "bold"), anchor="center"
+            )
+
+        # Response content section
+        response_y = info_y_start + (len(details) * line_height) + 20
+        canvas.create_text(
+            center_x, response_y,
+            text="Response Content:",
+            fill="#792D1B",
+            font=("Arial", 14, "bold"),
+            anchor="center"
         )
-        info_label.pack(pady=(0, 20))
+
+        # Response text area
+        response_frame = Frame(canvas, bg="#FFFFFF")
+        response_frame.place(x=50, y=response_y + 20, width=500, height=200)
+
+        response_text = Text(
+            response_frame,
+            font=("Arial", 10),
+            wrap="word",
+            state="disabled",
+            bg="#E8F5E8",
+            relief="solid",
+            bd=1
+        )
+        response_text.pack(fill="both", expand=True, padx=10, pady=10)
+        response_text.config(state="normal")
+        response_text.insert("1.0", feedback["response"] or "No response available.")
+        response_text.config(state="disabled")
 
         # Close button
-        Button(
-            dialog,
+        close_button = Button(
+            canvas,
             text="Close",
-            font=("Inter", 10, "bold"),
-            bg="#6c757d",
-            fg="#FFFFFF",
+            font=("Arial", 12, "bold"),
+            bg="#792D1B",
+            fg="#FFDA0C",
             relief="flat",
-            command=dialog.destroy,
-        ).pack(pady=20)
+            command=canvas.master.destroy,
+            width=15,
+            height=2
+        )
+        close_button.place(x=center_x - 75, y=response_y + 250)
 
     def show_no_feedbacks_message(self):
         """Show message when no feedbacks exist"""

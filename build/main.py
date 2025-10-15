@@ -196,7 +196,7 @@ class DocumentRequestSystem:
 
     def login_success_callback(self, user_data, user_type):
         """Callback after successful login - redirect based on user type"""
-        self.current_user = user_data
+        self.current_user = user_data  
         self.user_type = user_type
 
         # Log login activity
