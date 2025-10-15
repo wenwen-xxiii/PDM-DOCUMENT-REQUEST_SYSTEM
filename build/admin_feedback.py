@@ -22,6 +22,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from utils import EmailService
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -55,6 +56,9 @@ class AdminFeedbackManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
+        
+        # Email service
+        self.email_service = EmailService()
 
         self.setup_ui()
         self.load_feedbacks()
@@ -208,17 +212,18 @@ class AdminFeedbackManager:
             cursor.execute(
                 """
                 SELECT
-                    f.feedback_id, f.request_id, f.rating, f.comments, f.suggestions,
+                    f.feedback_id, f.request_id, f.rating, f.comments,
                     f.is_anonymous, f.responded_to, f.response, f.created_at,
                     dr.request_number,
                     CONCAT(s.first_name, ' ', s.last_name) as student_name,
-                    s.student_number,
+                    s.student_number, u.email as student_email,
                     dt.code as document_code, dt.name as document_name,
                     st.first_name as responded_by_first, st.last_name as responded_by_last,
                     f.responded_at
                 FROM feedback f
                 JOIN document_requests dr ON f.request_id = dr.request_id
                 JOIN students s ON dr.student_id = s.student_id
+                JOIN users u ON s.user_id = u.user_id
                 JOIN document_types dt ON dr.document_type_id = dt.document_type_id
                 LEFT JOIN staff st ON f.responded_by = st.staff_id
                 ORDER BY f.created_at DESC
@@ -301,7 +306,6 @@ class AdminFeedbackManager:
                     str(feedback.get("rating", "")),
                     "responded" if feedback.get("responded_to") else "pending",
                     str(feedback.get("comments", "")),
-                    str(feedback.get("suggestions", "")),
                 ]
                 text = " ".join(values).lower()
                 return q in text
@@ -517,7 +521,7 @@ class AdminFeedbackManager:
 
         # Comments section
         comments_frame = Frame(details_frame, bg="#FFFFFF")
-        comments_frame.pack(fill="x", pady=(20, 10))
+        comments_frame.pack(fill="x", pady=(20, 20))
 
         comments_label = Label(
             comments_frame,
@@ -532,7 +536,7 @@ class AdminFeedbackManager:
             comments_frame,
             font=("Inter", 10),
             width=60,
-            height=4,
+            height=6,
             wrap="word",
             state="disabled",
             bg="#F8F8F8",
@@ -541,35 +545,6 @@ class AdminFeedbackManager:
         comments_text.config(state="normal")
         comments_text.insert("1.0", feedback["comments"] or "No comments provided.")
         comments_text.config(state="disabled")
-
-        # Suggestions section
-        suggestions_frame = Frame(details_frame, bg="#FFFFFF")
-        suggestions_frame.pack(fill="x", pady=(10, 20))
-
-        suggestions_label = Label(
-            suggestions_frame,
-            text="Suggestions:",
-            font=("Inter", 10, "bold"),
-            bg="#FFFFFF",
-            fg="#333333",
-        )
-        suggestions_label.pack(anchor="w")
-
-        suggestions_text = Text(
-            suggestions_frame,
-            font=("Inter", 10),
-            width=60,
-            height=4,
-            wrap="word",
-            state="disabled",
-            bg="#F8F8F8",
-        )
-        suggestions_text.pack(fill="x", pady=(5, 0))
-        suggestions_text.config(state="normal")
-        suggestions_text.insert(
-            "1.0", feedback["suggestions"] or "No suggestions provided."
-        )
-        suggestions_text.config(state="disabled")
 
         # Response section (if exists)
         if feedback["responded_to"] and feedback["response"]:
@@ -694,7 +669,7 @@ class AdminFeedbackManager:
             details_frame,
             font=("Inter", 9),
             width=50,
-            height=3,
+            height=4,
             wrap="word",
             state="disabled",
             bg="#FFFFFF",
@@ -759,26 +734,53 @@ class AdminFeedbackManager:
         ).pack(side="left")
 
     def submit_feedback_response(self, feedback_id, response_content):
-        """Submit feedback response to database"""
+        """Submit feedback response to database and send email notification"""
         try:
             connection = self.get_db_connection()
             if not connection:
                 return False
 
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
 
-            # Get current admin staff_id (assuming admin user has staff record)
+            # Get feedback details and student email
             cursor.execute(
                 """
-                SELECT s.staff_id FROM staff s
+                SELECT 
+                    f.feedback_id, f.request_id, f.rating, f.comments,
+                    dr.request_number,
+                    CONCAT(s.first_name, ' ', s.last_name) as student_name,
+                    s.student_number, u.email as student_email,
+                    dt.code as document_code, dt.name as document_name
+                FROM feedback f
+                JOIN document_requests dr ON f.request_id = dr.request_id
+                JOIN students s ON dr.student_id = s.student_id
+                JOIN users u ON s.user_id = u.user_id
+                JOIN document_types dt ON dr.document_type_id = dt.document_type_id
+                WHERE f.feedback_id = %s
+            """,
+                (feedback_id,)
+            )
+            
+            feedback_data = cursor.fetchone()
+            if not feedback_data:
+                print(f"❌ Feedback not found: {feedback_id}")
+                return False
+
+            # Get current admin staff_id
+            cursor.execute(
+                """
+                SELECT s.staff_id, CONCAT(s.first_name, ' ', s.last_name) as staff_name 
+                FROM staff s
                 JOIN users u ON s.user_id = u.user_id
                 WHERE u.user_type = 'admin' AND u.is_active = TRUE
                 LIMIT 1
             """
             )
             staff_result = cursor.fetchone()
-            staff_id = staff_result[0] if staff_result else None
+            staff_id = staff_result['staff_id'] if staff_result else None
+            staff_name = staff_result['staff_name'] if staff_result else "Administrator"
 
+            # Update feedback with response
             cursor.execute(
                 """
                 UPDATE feedback
@@ -792,12 +794,110 @@ class AdminFeedbackManager:
             cursor.close()
             connection.close()
 
+            # Send email notification to student
+            self.send_feedback_response_email(feedback_data, response_content, staff_name)
+
             print(f"✅ Response submitted for feedback {feedback_id}")
             return True
 
         except Error as e:
             print(f"❌ Error submitting response: {e}")
             return False
+
+    def send_feedback_response_email(self, feedback_data, response_content, staff_name):
+        """Send feedback response email to student"""
+        try:
+            student_email = feedback_data['student_email']
+            if not student_email:
+                print("❌ No student email found for feedback response")
+                return False
+
+            # Create email content
+            subject = f"Feedback Response - Request #{feedback_data['request_number']}"
+            
+            # Format rating as stars
+            rating_stars = "★" * feedback_data['rating'] + "☆" * (5 - feedback_data['rating'])
+            
+            body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
+                    </div>
+                    
+                    <div style="padding: 30px;">
+                        <h2 style="color: #800000;">Feedback Response</h2>
+                        <p>Dear {feedback_data['student_name']},</p>
+                        
+                        <p>Thank you for your feedback regarding your document request. We have reviewed your comments and provided a response below.</p>
+                        
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Your Feedback Details:</h3>
+                            <p><strong>Request Number:</strong> {feedback_data['request_number']}</p>
+                            <p><strong>Document:</strong> {feedback_data['document_code']} - {feedback_data['document_name']}</p>
+                            <p><strong>Rating:</strong> {rating_stars} ({feedback_data['rating']}/5)</p>
+                            <p><strong>Your Comments:</strong></p>
+                            <div style="background: white; padding: 15px; border-left: 4px solid #800000; margin: 10px 0;">
+                                {feedback_data['comments']}
+                            </div>
+                        </div>
+                        
+                        <div style="background: #e8f5e8; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                            <h3 style="color: #800000; margin-top: 0;">Our Response:</h3>
+                            <div style="background: white; padding: 15px; border-left: 4px solid #28a745; margin: 10px 0;">
+                                {response_content}
+                            </div>
+                            <p style="font-size: 12px; color: #666; margin: 10px 0 0 0;">
+                                <em>Responded by: {staff_name}</em>
+                            </p>
+                        </div>
+                        
+                        <p>We appreciate your feedback and are committed to continuously improving our services.</p>
+                        
+                        <p>If you have any further questions or concerns, please don't hesitate to contact us.</p>
+                        
+                        <p style="margin-top: 30px;">
+                            Best regards,<br>
+                            <strong>Pambayang Dalubhasaan ng Marilao</strong><br>
+                            Registrar Office
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Send email
+            success = self.email_service._send_email(student_email, subject, body)
+            
+            if success:
+                print(f"✅ Feedback response email sent to {student_email}")
+            else:
+                print(f"❌ Failed to send feedback response email to {student_email}")
+                # Fallback notification
+                self._fallback_feedback_email(student_email, subject, response_content, feedback_data)
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error sending feedback response email: {e}")
+            return False
+
+    def _fallback_feedback_email(self, student_email, subject, response_content, feedback_data):
+        """Fallback feedback email notification"""
+        print("=" * 60)
+        print("📧 FEEDBACK RESPONSE EMAIL (FALLBACK)")
+        print("=" * 60)
+        print(f"To: {student_email}")
+        print(f"Subject: {subject}")
+        print(f"Request: {feedback_data['request_number']}")
+        print(f"Document: {feedback_data['document_code']} - {feedback_data['document_name']}")
+        print(f"Rating: {'★' * feedback_data['rating']}{'☆' * (5 - feedback_data['rating'])}")
+        print(f"Student Comments: {feedback_data['comments']}")
+        print(f"Admin Response: {response_content}")
+        print("=" * 60)
 
     def view_response(self, feedback):
         """View existing response"""

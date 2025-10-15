@@ -204,7 +204,6 @@ class DatabaseInitializer:
                     request_id INT NOT NULL,
                     rating INT CHECK (rating >= 1 AND rating <= 5),
                     comments TEXT,
-                    suggestions TEXT,
                     is_anonymous BOOLEAN DEFAULT FALSE,
                     responded_to BOOLEAN DEFAULT FALSE,
                     response TEXT,
