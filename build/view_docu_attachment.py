@@ -38,6 +38,12 @@ class DocumentAttachmentViewer:
         self.current_attachment_index = 0
         self.temp_files = []  # Store temp file paths for cleanup
         
+        # PDF navigation variables
+        self.current_pdf_document = None
+        self.current_pdf_page = 0
+        self.total_pdf_pages = 0
+        self.is_viewing_pdf = False
+        
         # Store image references to prevent garbage collection
         self.images = []
         
@@ -75,7 +81,7 @@ class DocumentAttachmentViewer:
         """Center the window on the screen"""
         self.window.update_idletasks()
         width = 1000
-        height = 700
+        height = 720
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
         self.window.geometry(f'{width}x{height}+{x}+{y}')
@@ -97,7 +103,7 @@ class DocumentAttachmentViewer:
         
         # Main content area
         self.canvas.create_rectangle(
-            25.0, 100.0, 975.0, 650.0,
+            25.0, 100.0, 975.0, 670.0,
             fill="#FFFFFF", outline="#DDDDDD", width=2
         )
         
@@ -167,7 +173,7 @@ class DocumentAttachmentViewer:
             command=self.previous_attachment,
             state="disabled"
         )
-        self.prev_button.place(x=200, y=200, width=100, height=30)
+        self.prev_button.place(x=330, y=200, width=100, height=30)
         
         # Next button
         self.next_button = Button(
@@ -180,7 +186,7 @@ class DocumentAttachmentViewer:
             command=self.next_attachment,
             state="disabled"
         )
-        self.next_button.place(x=320, y=200, width=100, height=30)
+        self.next_button.place(x=570, y=200, width=100, height=30)
         
         # File counter
         self.file_counter_label = Label(
@@ -256,7 +262,7 @@ class DocumentAttachmentViewer:
             command=self.download_attachment,
             state="disabled"
         )
-        self.download_button.place(x=500, y=620, width=120, height=35)
+        self.download_button.place(x=300, y=620, width=120, height=35)
         
         # Feedback button
         self.feedback_button = Button(
@@ -269,7 +275,7 @@ class DocumentAttachmentViewer:
             command=self.open_feedback_dialog,
             state="disabled"
         )
-        self.feedback_button.place(x=640, y=620, width=120, height=35)
+        self.feedback_button.place(x=440, y=620, width=120, height=35)
         
         # Close button
         self.close_button = Button(
@@ -281,7 +287,7 @@ class DocumentAttachmentViewer:
             relief="flat",
             command=self.close_window
         )
-        self.close_button.place(x=780, y=620, width=100, height=35)
+        self.close_button.place(x=580, y=620, width=100, height=35)
         
     def load_attachments(self):
         """Load attachments from database"""
@@ -329,15 +335,24 @@ class DocumentAttachmentViewer:
             
     def update_navigation_buttons(self):
         """Update navigation button states"""
-        if len(self.attachments) <= 1:
-            self.prev_button.config(state="disabled")
-            self.next_button.config(state="disabled")
-        else:
-            self.prev_button.config(state="normal")
-            self.next_button.config(state="normal")
+        if self.is_viewing_pdf and self.current_pdf_document:
+            # PDF page navigation
+            self.prev_button.config(state="normal" if self.current_pdf_page > 0 else "disabled")
+            self.next_button.config(state="normal" if self.current_pdf_page < self.total_pdf_pages - 1 else "disabled")
             
-        # Update file counter
-        self.file_counter_label.config(text=f"{self.current_attachment_index + 1} / {len(self.attachments)}")
+            # Update file counter to show PDF page info
+            self.file_counter_label.config(text=f"Page {self.current_pdf_page + 1} / {self.total_pdf_pages}")
+        else:
+            # Attachment navigation
+            if len(self.attachments) <= 1:
+                self.prev_button.config(state="disabled")
+                self.next_button.config(state="disabled")
+            else:
+                self.prev_button.config(state="normal")
+                self.next_button.config(state="normal")
+                
+            # Update file counter
+            self.file_counter_label.config(text=f"{self.current_attachment_index + 1} / {len(self.attachments)}")
         
     def show_attachment(self, index):
         """Show the attachment at the given index"""
@@ -373,10 +388,13 @@ class DocumentAttachmentViewer:
             
             # Handle different file types
             if file_type.startswith('image/') or file_name.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                self.is_viewing_pdf = False
                 self.show_image_preview(file_data)
             elif file_type == 'application/pdf' or file_name.endswith('.pdf'):
+                self.is_viewing_pdf = True
                 self.show_pdf_preview(file_data)
             else:
+                self.is_viewing_pdf = False
                 self.show_text_preview(file_data, file_name)
                 
         except Exception as e:
@@ -433,63 +451,24 @@ class DocumentAttachmentViewer:
             )
             
     def show_pdf_preview(self, file_data):
-        """Show PDF preview (first page as image)"""
+        """Show PDF preview with page navigation"""
         try:
             # Try to convert PDF to image using PIL (if available)
             try:
                 from PIL import Image
                 import fitz  # PyMuPDF
                 
-                # Open PDF from bytes
-                pdf_document = fitz.open(stream=file_data, filetype="pdf")
+                # Close previous PDF document if exists
+                if self.current_pdf_document:
+                    self.current_pdf_document.close()
                 
-                if len(pdf_document) > 0:
-                    # Get first page
-                    page = pdf_document[0]
-                    
-                    # Convert to image
-                    mat = fitz.Matrix(2.0, 2.0)  # Scale factor for better quality
-                    pix = page.get_pixmap(matrix=mat)
-                    img_data = pix.tobytes("png")
-                    
-                    # Convert to PIL Image
-                    image = Image.open(io.BytesIO(img_data))
-                    
-                    # Calculate display size
-                    display_width = 800
-                    display_height = 300
-                    
-                    img_width, img_height = image.size
-                    scale_w = display_width / img_width
-                    scale_h = display_height / img_height
-                    scale = min(scale_w, scale_h, 1.0)
-                    
-                    new_width = int(img_width * scale)
-                    new_height = int(img_height * scale)
-                    
-                    # Resize image
-                    image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    
-                    # Convert to PhotoImage
-                    photo = ImageTk.PhotoImage(image)
-                    self.images.append(photo)
-                    
-                    # Center the image
-                    x = (900 - new_width) // 2
-                    y = (350 - new_height) // 2
-                    
-                    self.preview_canvas.create_image(x, y, image=photo, anchor="nw")
-                    
-                    # Add page info
-                    self.preview_canvas.create_text(
-                        450, 320,
-                        text=f"Page 1 of {len(pdf_document)} (PDF Preview)",
-                        fill="#666666",
-                        font=("Inter", 10),
-                        anchor="center"
-                    )
-                    
-                    pdf_document.close()
+                # Open PDF from bytes
+                self.current_pdf_document = fitz.open(stream=file_data, filetype="pdf")
+                self.total_pdf_pages = len(self.current_pdf_document)
+                self.current_pdf_page = 0  # Reset to first page
+                
+                if self.total_pdf_pages > 0:
+                    self.show_current_pdf_page()
                 else:
                     self.preview_canvas.create_text(
                         450, 175,
@@ -513,6 +492,72 @@ class DocumentAttachmentViewer:
             self.preview_canvas.create_text(
                 450, 175,
                 text=f"Error loading PDF: {str(e)}",
+                fill="#FF0000",
+                font=("Inter", 12),
+                anchor="center"
+            )
+    
+    def show_current_pdf_page(self):
+        """Show the current PDF page"""
+        try:
+            if not self.current_pdf_document or self.total_pdf_pages == 0:
+                return
+                
+            from PIL import Image
+            import fitz  # PyMuPDF
+            
+            # Clear previous content
+            self.preview_canvas.delete("all")
+            
+            # Get current page
+            page = self.current_pdf_document[self.current_pdf_page]
+            
+            # Convert to image
+            mat = fitz.Matrix(2.0, 2.0)  # Scale factor for better quality
+            pix = page.get_pixmap(matrix=mat)
+            img_data = pix.tobytes("png")
+            
+            # Convert to PIL Image
+            image = Image.open(io.BytesIO(img_data))
+            
+            # Calculate display size
+            display_width = 800
+            display_height = 300
+            
+            img_width, img_height = image.size
+            scale_w = display_width / img_width
+            scale_h = display_height / img_height
+            scale = min(scale_w, scale_h, 1.0)
+            
+            new_width = int(img_width * scale)
+            new_height = int(img_height * scale)
+            
+            # Resize image
+            image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            
+            # Convert to PhotoImage
+            photo = ImageTk.PhotoImage(image)
+            self.images.append(photo)
+            
+            # Center the image
+            x = (900 - new_width) // 2
+            y = (350 - new_height) // 2
+            
+            self.preview_canvas.create_image(x, y, image=photo, anchor="nw")
+            
+            # Add page info
+            self.preview_canvas.create_text(
+                450, 320,
+                text=f"Page {self.current_pdf_page + 1} of {self.total_pdf_pages} (PDF Preview)",
+                fill="#666666",
+                font=("Inter", 10),
+                anchor="center"
+            )
+            
+        except Exception as e:
+            self.preview_canvas.create_text(
+                450, 175,
+                text=f"Error loading PDF page: {str(e)}",
                 fill="#FF0000",
                 font=("Inter", 12),
                 anchor="center"
@@ -560,14 +605,30 @@ class DocumentAttachmentViewer:
             )
             
     def previous_attachment(self):
-        """Show previous attachment"""
-        if self.current_attachment_index > 0:
-            self.show_attachment(self.current_attachment_index - 1)
+        """Show previous attachment or PDF page"""
+        if self.is_viewing_pdf and self.current_pdf_document:
+            # Navigate PDF pages
+            if self.current_pdf_page > 0:
+                self.current_pdf_page -= 1
+                self.show_current_pdf_page()
+                self.update_navigation_buttons()
+        else:
+            # Navigate attachments
+            if self.current_attachment_index > 0:
+                self.show_attachment(self.current_attachment_index - 1)
             
     def next_attachment(self):
-        """Show next attachment"""
-        if self.current_attachment_index < len(self.attachments) - 1:
-            self.show_attachment(self.current_attachment_index + 1)
+        """Show next attachment or PDF page"""
+        if self.is_viewing_pdf and self.current_pdf_document:
+            # Navigate PDF pages
+            if self.current_pdf_page < self.total_pdf_pages - 1:
+                self.current_pdf_page += 1
+                self.show_current_pdf_page()
+                self.update_navigation_buttons()
+        else:
+            # Navigate attachments
+            if self.current_attachment_index < len(self.attachments) - 1:
+                self.show_attachment(self.current_attachment_index + 1)
             
     def download_attachment(self):
         """Download the current attachment"""
@@ -645,7 +706,7 @@ class DocumentAttachmentViewer:
                 20, 50, 380, 200,
                 fill="#FFF1C2",  # Light yellow/cream color
                 outline="#D4AF37",  # Light brown border
-                width=1
+                width=2
             )
             
             # Text input area
@@ -675,7 +736,7 @@ class DocumentAttachmentViewer:
                 relief="flat",
                 command=lambda: self.submit_feedback(feedback_dialog)
             )
-            submit_button.place(x=250, y=260, width=80, height=30)
+            submit_button.place(x=225, y=260, width=80, height=30)
             
             cancel_button = Button(
                 feedback_dialog,
@@ -686,7 +747,7 @@ class DocumentAttachmentViewer:
                 relief="flat",
                 command=feedback_dialog.destroy
             )
-            cancel_button.place(x=340, y=260, width=60, height=30)
+            cancel_button.place(x=315, y=260, width=60, height=30)
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open feedback dialog: {str(e)}")
@@ -790,6 +851,14 @@ class DocumentAttachmentViewer:
                 
     def close_window(self):
         """Close the window and cleanup"""
+        # Cleanup PDF document
+        if self.current_pdf_document:
+            try:
+                self.current_pdf_document.close()
+            except:
+                pass
+            self.current_pdf_document = None
+        
         # Cleanup temp files
         for temp_file in self.temp_files:
             try:
