@@ -57,7 +57,7 @@ class AdminFeedbackManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
-        
+
         # Email service
         self.email_service = EmailService()
 
@@ -466,7 +466,7 @@ class AdminFeedbackManager:
             width=600,
             bd=0,
             highlightthickness=0,
-            relief="ridge"
+            relief="ridge",
         )
         canvas.place(x=0, y=0)
 
@@ -482,31 +482,31 @@ class AdminFeedbackManager:
         width, height = 600, 720
         x = (dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (dialog.winfo_screenheight() // 2) - (height // 2)
-        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
 
     def _create_feedback_header(self, canvas, dialog):
         """Create header section matching payment_window.py style"""
         # Header rectangle
         canvas.create_rectangle(0.0, 0.0, 600.0, 98.0, fill="#792D1B", outline="")
-        
+
         # Yellow header strip
         canvas.create_rectangle(0.0, 57.0, 600.0, 99.0, fill="#FFDA0C", outline="")
-        
+
         # Header text
         canvas.create_text(
-            300.0, 78.0,
+            300.0,
+            78.0,
             text="Feedback Details",
             fill="#000000",
             font=("Arial", 16, "bold"),
-            anchor="center"
+            anchor="center",
         )
 
     def _create_feedback_content(self, canvas, feedback):
         """Create feedback content section"""
         # White background panel
         canvas.create_rectangle(
-            25.0, 120.0, 575.0, 650.0,
-            fill="#FFFFFF", outline="#DDDDDD", width=2
+            25.0, 120.0, 575.0, 650.0, fill="#FFFFFF", outline="#DDDDDD", width=2
         )
 
         # Student name (or Anonymous)
@@ -540,18 +540,23 @@ class AdminFeedbackManager:
         for i, (label, value) in enumerate(details):
             detail_text = f"{label} {value}"
             canvas.create_text(
-                center_x, info_y_start + (i * line_height),
-                text=detail_text, fill="#000000", font=("Arial", 12, "bold"), anchor="center"
+                center_x,
+                info_y_start + (i * line_height),
+                text=detail_text,
+                fill="#000000",
+                font=("Arial", 12, "bold"),
+                anchor="center",
             )
 
         # Comments section
         comments_y = info_y_start + (len(details) * line_height) + 20
         canvas.create_text(
-            center_x, comments_y,
+            center_x,
+            comments_y,
             text="Comments:",
             fill="#792D1B",
             font=("Arial", 14, "bold"),
-            anchor="center"
+            anchor="center",
         )
 
         # Comments text area
@@ -565,7 +570,7 @@ class AdminFeedbackManager:
             state="disabled",
             bg="#F8F8F8",
             relief="solid",
-            bd=1
+            bd=1,
         )
         comments_text.pack(fill="both", expand=True, padx=10, pady=10)
         comments_text.config(state="normal")
@@ -576,11 +581,12 @@ class AdminFeedbackManager:
         response_y = comments_y + 160
         if feedback["responded_to"] and feedback["response"]:
             canvas.create_text(
-                center_x, response_y,
+                center_x,
+                response_y,
                 text="Admin Response:",
                 fill="#792D1B",
                 font=("Arial", 14, "bold"),
-                anchor="center"
+                anchor="center",
             )
 
             # Response text area
@@ -594,7 +600,7 @@ class AdminFeedbackManager:
                 state="disabled",
                 bg="#E8F5E8",
                 relief="solid",
-                bd=1
+                bd=1,
             )
             response_text.pack(fill="both", expand=True, padx=10, pady=10)
             response_text.config(state="normal")
@@ -614,11 +620,12 @@ class AdminFeedbackManager:
             )
 
             canvas.create_text(
-                center_x, response_y + 140,
+                center_x,
+                response_y + 140,
                 text=f"Responded by: {responder_name} on {response_date}",
                 fill="#666666",
                 font=("Arial", 10, "italic"),
-                anchor="center"
+                anchor="center",
             )
 
             # Close button position
@@ -637,7 +644,7 @@ class AdminFeedbackManager:
             relief="flat",
             command=canvas.master.destroy,
             width=15,
-            height=2
+            height=2,
         )
         close_button.place(x=center_x - 75, y=button_y)
 
@@ -645,6 +652,7 @@ class AdminFeedbackManager:
         """Get path to assets"""
         import os
         import sys
+
         try:
             base_path = sys._MEIPASS
         except Exception:
@@ -652,131 +660,247 @@ class AdminFeedbackManager:
         return os.path.join(base_path, "resources", "assets", path)
 
     def respond_to_feedback(self, feedback):
-        """Open respond to feedback dialog"""
+        """Open respond to feedback dialog with payment_window.py layout style"""
         dialog = Toplevel(self.parent)
         dialog.title(f"Respond to Feedback - {feedback['request_number']}")
-        dialog.geometry("500x600")
+        dialog.geometry("600x720")
+        dialog.configure(bg="#FCECB7")
         dialog.resizable(False, False)
 
         # Center the dialog
         dialog.transient(self.parent)
         dialog.grab_set()
+        self._center_respond_dialog(dialog)
 
-        # Title
-        title_label = Label(
+        # Create main canvas
+        canvas = Canvas(
             dialog,
-            text="Respond to Feedback",
-            font=("Inter", 14, "bold"),
-            bg="#FFFFFF",
-            fg="#792D1B",
+            bg="#FCECB7",
+            height=720,
+            width=600,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge",
         )
-        title_label.pack(pady=20)
+        canvas.place(x=0, y=0)
 
-        # Feedback details (read-only)
-        details_frame = Frame(dialog, bg="#F8F8F8", relief="solid", bd=1)
-        details_frame.pack(fill="x", padx=20, pady=(0, 20))
+        # Create header section
+        self._create_respond_header(canvas, dialog)
 
+        # Create content section
+        self._create_respond_content(canvas, feedback)
+
+    def _center_respond_dialog(self, dialog):
+        """Center the respond dialog on screen"""
+        dialog.update_idletasks()
+        width, height = 600, 720
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _create_respond_header(self, canvas, dialog):
+        """Create header section matching payment_window.py style"""
+        # Header rectangle
+        canvas.create_rectangle(0.0, 0.0, 600.0, 98.0, fill="#792D1B", outline="")
+
+        # Back button
+        #self._create_respond_back_button(canvas, dialog)
+
+        # Yellow header strip
+        canvas.create_rectangle(0.0, 57.0, 600.0, 99.0, fill="#FFDA0C", outline="")
+
+        # Header text
+        canvas.create_text(
+            300.0,
+            78.0,
+            text="Respond to Feedback",
+            fill="#000000",
+            font=("Arial", 16, "bold"),
+            anchor="center",
+        )
+
+    def _create_respond_back_button(self, canvas, dialog):
+        """Create back button for respond dialog"""
+        try:
+            button_image = PhotoImage(file=self._relative_to_assets("button_back.png"))
+            back_button = Button(
+                dialog,
+                image=button_image,
+                borderwidth=0,
+                highlightthickness=0,
+                command=dialog.destroy,
+                relief="flat",
+                bg="#792D1B",
+                activebackground="#792D1B",
+            )
+            back_button.place(x=27, y=19, width=15, height=18)
+            back_button.image = button_image
+        except Exception:
+            # Fallback text button
+            back_button = Button(
+                dialog,
+                text="←",
+                font=("Arial", 14, "bold"),
+                command=dialog.destroy,
+                bg="#792D1B",
+                fg="white",
+                borderwidth=0,
+                relief="flat",
+            )
+            back_button.place(x=20, y=15, width=30, height=30)
+
+    def _create_respond_content(self, canvas, feedback):
+        """Create respond content section"""
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 120.0, 575.0, 700.0, fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+
+        # Student name (or Anonymous)
         student_display = (
             "Anonymous" if feedback["is_anonymous"] else feedback["student_name"]
         )
+
+        # Rating display
         rating_stars = self.format_rating_stars(feedback["rating"])
 
-        Label(
-            details_frame,
-            text=f"Request: {feedback['request_number']}",
-            font=("Inter", 10, "bold"),
-            bg="#F8F8F8",
-        ).pack(anchor="w", padx=10, pady=(10, 5))
-        Label(
-            details_frame,
-            text=f"Student: {student_display}",
-            font=("Inter", 10),
-            bg="#F8F8F8",
-        ).pack(anchor="w", padx=10, pady=2)
-        Label(
-            details_frame,
-            text=f"Document: {feedback['document_code']}",
-            font=("Inter", 10),
-            bg="#F8F8F8",
-        ).pack(anchor="w", padx=10, pady=2)
-        Label(
-            details_frame,
-            text=f"Rating: {rating_stars}",
-            font=("Inter", 10),
-            bg="#F8F8F8",
-        ).pack(anchor="w", padx=10, pady=2)
+        # Feedback information - centered layout
+        info_y_start = 150
+        line_height = 30
+        center_x = 300.0  # Center of the dialog (600/2)
 
-        # Comments display
-        Label(
-            details_frame, text="Comments:", font=("Inter", 10, "bold"), bg="#F8F8F8"
-        ).pack(anchor="w", padx=10, pady=(10, 5))
+        details = [
+            ("Request Number:", feedback["request_number"]),
+            ("Student:", student_display),
+            ("Document:", f"{feedback['document_code']} - {feedback['document_name']}"),
+            ("Rating:", rating_stars),
+            (
+                "Date:",
+                (
+                    feedback["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+                    if feedback["created_at"]
+                    else "N/A"
+                ),
+            ),
+        ]
+
+        for i, (label, value) in enumerate(details):
+            detail_text = f"{label} {value}"
+            canvas.create_text(
+                center_x,
+                info_y_start + (i * line_height),
+                text=detail_text,
+                fill="#000000",
+                font=("Arial", 12, "bold"),
+                anchor="center",
+            )
+
+        # Comments section
+        comments_y = info_y_start + (len(details) * line_height) + 20
+        canvas.create_text(
+            center_x,
+            comments_y,
+            text="Student Comments:",
+            fill="#792D1B",
+            font=("Arial", 14, "bold"),
+            anchor="center",
+        )
+
+        # Comments text area
+        comments_frame = Frame(canvas, bg="#FFFFFF")
+        comments_frame.place(x=50, y=comments_y + 20, width=500, height=80)
+
         comments_text = Text(
-            details_frame,
-            font=("Inter", 9),
-            width=50,
-            height=4,
+            comments_frame,
+            font=("Arial", 10),
             wrap="word",
             state="disabled",
-            bg="#FFFFFF",
+            bg="#F8F8F8",
+            relief="solid",
+            bd=1,
         )
-        comments_text.pack(fill="x", padx=10, pady=(0, 10))
+        comments_text.pack(fill="both", expand=True, padx=10, pady=10)
         comments_text.config(state="normal")
         comments_text.insert("1.0", feedback["comments"] or "No comments provided.")
         comments_text.config(state="disabled")
 
-        # Response input
-        Label(dialog, text="Your Response:", font=("Inter", 10, "bold")).pack(
-            anchor="w", padx=20, pady=(0, 5)
+        # Response input section
+        response_input_y = comments_y + 120
+        canvas.create_text(
+            center_x,
+            response_input_y,
+            text="Your Response:",
+            fill="#792D1B",
+            font=("Arial", 14, "bold"),
+            anchor="center",
         )
-        response_text = Text(
-            dialog, font=("Inter", 10), width=50, height=8, wrap="word"
+
+        # Response text area
+        response_frame = Frame(canvas, bg="#FFFFFF")
+        response_frame.place(x=50, y=response_input_y + 20, width=500, height=120)
+
+        self.response_text = Text(
+            response_frame,
+            font=("Arial", 10),
+            wrap="word",
+            bg="#FFFFFF",
+            relief="solid",
+            bd=1,
         )
-        response_text.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.response_text.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Buttons
-        def submit_response():
-            response_content = response_text.get("1.0", "end-1c").strip()
+        button_y = response_input_y + 160
+        button_frame = Frame(canvas, bg="#FFFFFF")
+        button_frame.place(x=80, y=button_y, width=450, height=50)
 
-            if not response_content:
-                messagebox.showerror("Error", "Please enter a response")
-                return
-
-            success = self.submit_feedback_response(
-                feedback["feedback_id"], response_content
-            )
-
-            if success:
-                dialog.destroy()
-                self.load_feedbacks()
-                self.update_display()
-                messagebox.showinfo("Success", "Response submitted successfully")
-            else:
-                messagebox.showerror("Error", "Failed to submit response")
-
-        def cancel_form():
-            dialog.destroy()
-
-        button_frame = Frame(dialog, bg="#FFFFFF")
-        button_frame.pack(fill="x", padx=20, pady=(0, 20))
-
-        Button(
+        # Submit button
+        submit_button = Button(
             button_frame,
             text="Submit Response",
-            font=("Inter", 10, "bold"),
+            font=("Arial", 12, "bold"),
             bg="#28a745",
             fg="#FFFFFF",
             relief="flat",
-            command=submit_response,
-        ).pack(side="left", padx=(0, 10))
-        Button(
+            command=lambda: self._submit_feedback_response(canvas, feedback),
+            width=15,
+            height=2,
+        )
+        submit_button.pack(side="left", padx=(50, 20))
+
+        # Cancel button
+        cancel_button = Button(
             button_frame,
             text="Cancel",
-            font=("Inter", 10, "bold"),
+            font=("Arial", 12, "bold"),
             bg="#6c757d",
             fg="#FFFFFF",
             relief="flat",
-            command=cancel_form,
-        ).pack(side="left")
+            command=canvas.master.destroy,
+            width=15,
+            height=2,
+        )
+        cancel_button.pack(side="left")
+
+    def _submit_feedback_response(self, canvas, feedback):
+        """Submit feedback response"""
+        response_content = self.response_text.get("1.0", "end-1c").strip()
+
+        if not response_content:
+            messagebox.showerror("Error", "Please enter a response")
+            return
+
+        success = self.submit_feedback_response(
+            feedback["feedback_id"], response_content
+        )
+
+        if success:
+            canvas.master.destroy()
+            self.load_feedbacks()
+            self.update_display()
+            messagebox.showinfo("Success", "Response submitted successfully")
+        else:
+            messagebox.showerror("Error", "Failed to submit response")
 
     def submit_feedback_response(self, feedback_id, response_content):
         """Submit feedback response to database and send email notification"""
@@ -790,7 +914,7 @@ class AdminFeedbackManager:
             # Get feedback details and student email
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     f.feedback_id, f.request_id, f.rating, f.comments,
                     dr.request_number,
                     CONCAT(s.first_name, ' ', s.last_name) as student_name,
@@ -803,9 +927,9 @@ class AdminFeedbackManager:
                 JOIN document_types dt ON dr.document_type_id = dt.document_type_id
                 WHERE f.feedback_id = %s
             """,
-                (feedback_id,)
+                (feedback_id,),
             )
-            
+
             feedback_data = cursor.fetchone()
             if not feedback_data:
                 print(f"❌ Feedback not found: {feedback_id}")
@@ -814,7 +938,7 @@ class AdminFeedbackManager:
             # Get current admin staff_id
             cursor.execute(
                 """
-                SELECT s.staff_id, CONCAT(s.first_name, ' ', s.last_name) as staff_name 
+                SELECT s.staff_id, CONCAT(s.first_name, ' ', s.last_name) as staff_name
                 FROM staff s
                 JOIN users u ON s.user_id = u.user_id
                 WHERE u.user_type = 'admin' AND u.is_active = TRUE
@@ -822,8 +946,8 @@ class AdminFeedbackManager:
             """
             )
             staff_result = cursor.fetchone()
-            staff_id = staff_result['staff_id'] if staff_result else None
-            staff_name = staff_result['staff_name'] if staff_result else "Administrator"
+            staff_id = staff_result["staff_id"] if staff_result else None
+            staff_name = staff_result["staff_name"] if staff_result else "Administrator"
 
             # Update feedback with response
             cursor.execute(
@@ -840,7 +964,9 @@ class AdminFeedbackManager:
             connection.close()
 
             # Send email notification to student
-            self.send_feedback_response_email(feedback_data, response_content, staff_name)
+            self.send_feedback_response_email(
+                feedback_data, response_content, staff_name
+            )
 
             print(f"✅ Response submitted for feedback {feedback_id}")
             return True
@@ -852,17 +978,19 @@ class AdminFeedbackManager:
     def send_feedback_response_email(self, feedback_data, response_content, staff_name):
         """Send feedback response email to student"""
         try:
-            student_email = feedback_data['student_email']
+            student_email = feedback_data["student_email"]
             if not student_email:
                 print("❌ No student email found for feedback response")
                 return False
 
             # Create email content
             subject = f"Feedback Response - Request #{feedback_data['request_number']}"
-            
+
             # Format rating as stars
-            rating_stars = "★" * feedback_data['rating'] + "☆" * (5 - feedback_data['rating'])
-            
+            rating_stars = "★" * feedback_data["rating"] + "☆" * (
+                5 - feedback_data["rating"]
+            )
+
             body = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6;">
@@ -871,13 +999,13 @@ class AdminFeedbackManager:
                         <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
                         <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
                     </div>
-                    
+
                     <div style="padding: 30px;">
                         <h2 style="color: #800000;">Feedback Response</h2>
                         <p>Dear {feedback_data['student_name']},</p>
-                        
+
                         <p>Thank you for your feedback regarding your document request. We have reviewed your comments and provided a response below.</p>
-                        
+
                         <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
                             <h3 style="color: #800000; margin-top: 0;">Your Feedback Details:</h3>
                             <p><strong>Request Number:</strong> {feedback_data['request_number']}</p>
@@ -888,7 +1016,7 @@ class AdminFeedbackManager:
                                 {feedback_data['comments']}
                             </div>
                         </div>
-                        
+
                         <div style="background: #e8f5e8; padding: 20px; border-radius: 5px; margin: 20px 0;">
                             <h3 style="color: #800000; margin-top: 0;">Our Response:</h3>
                             <div style="background: white; padding: 15px; border-left: 4px solid #28a745; margin: 10px 0;">
@@ -898,11 +1026,11 @@ class AdminFeedbackManager:
                                 <em>Responded by: {staff_name}</em>
                             </p>
                         </div>
-                        
+
                         <p>We appreciate your feedback and are committed to continuously improving our services.</p>
-                        
+
                         <p>If you have any further questions or concerns, please don't hesitate to contact us.</p>
-                        
+
                         <p style="margin-top: 30px;">
                             Best regards,<br>
                             <strong>Pambayang Dalubhasaan ng Marilao</strong><br>
@@ -913,24 +1041,28 @@ class AdminFeedbackManager:
             </body>
             </html>
             """
-            
+
             # Send email
             success = self.email_service._send_email(student_email, subject, body)
-            
+
             if success:
                 print(f"✅ Feedback response email sent to {student_email}")
             else:
                 print(f"❌ Failed to send feedback response email to {student_email}")
                 # Fallback notification
-                self._fallback_feedback_email(student_email, subject, response_content, feedback_data)
-            
+                self._fallback_feedback_email(
+                    student_email, subject, response_content, feedback_data
+                )
+
             return success
-            
+
         except Exception as e:
             print(f"❌ Error sending feedback response email: {e}")
             return False
 
-    def _fallback_feedback_email(self, student_email, subject, response_content, feedback_data):
+    def _fallback_feedback_email(
+        self, student_email, subject, response_content, feedback_data
+    ):
         """Fallback feedback email notification"""
         print("=" * 60)
         print("📧 FEEDBACK RESPONSE EMAIL (FALLBACK)")
@@ -938,8 +1070,12 @@ class AdminFeedbackManager:
         print(f"To: {student_email}")
         print(f"Subject: {subject}")
         print(f"Request: {feedback_data['request_number']}")
-        print(f"Document: {feedback_data['document_code']} - {feedback_data['document_name']}")
-        print(f"Rating: {'★' * feedback_data['rating']}{'☆' * (5 - feedback_data['rating'])}")
+        print(
+            f"Document: {feedback_data['document_code']} - {feedback_data['document_name']}"
+        )
+        print(
+            f"Rating: {'★' * feedback_data['rating']}{'☆' * (5 - feedback_data['rating'])}"
+        )
         print(f"Student Comments: {feedback_data['comments']}")
         print(f"Admin Response: {response_content}")
         print("=" * 60)
@@ -965,7 +1101,7 @@ class AdminFeedbackManager:
             width=600,
             bd=0,
             highlightthickness=0,
-            relief="ridge"
+            relief="ridge",
         )
         canvas.place(x=0, y=0)
 
@@ -981,31 +1117,31 @@ class AdminFeedbackManager:
         width, height = 600, 700
         x = (dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (dialog.winfo_screenheight() // 2) - (height // 2)
-        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
 
     def _create_response_header(self, canvas, dialog):
         """Create header section matching payment_window.py style"""
         # Header rectangle
         canvas.create_rectangle(0.0, 0.0, 600.0, 98.0, fill="#792D1B", outline="")
-        
+
         # Yellow header strip
         canvas.create_rectangle(0.0, 57.0, 600.0, 99.0, fill="#FFDA0C", outline="")
-        
+
         # Header text
         canvas.create_text(
-            300.0, 78.0,
+            300.0,
+            78.0,
             text="Admin Response",
             fill="#000000",
             font=("Arial", 16, "bold"),
-            anchor="center"
+            anchor="center",
         )
 
     def _create_response_content(self, canvas, feedback):
         """Create response content section"""
         # White background panel
         canvas.create_rectangle(
-            25.0, 120.0, 575.0, 650.0,
-            fill="#FFFFFF", outline="#DDDDDD", width=2
+            25.0, 120.0, 575.0, 650.0, fill="#FFFFFF", outline="#DDDDDD", width=2
         )
 
         # Response information - centered layout
@@ -1035,18 +1171,23 @@ class AdminFeedbackManager:
         for i, (label, value) in enumerate(details):
             detail_text = f"{label} {value}"
             canvas.create_text(
-                center_x, info_y_start + (i * line_height),
-                text=detail_text, fill="#000000", font=("Arial", 12, "bold"), anchor="center"
+                center_x,
+                info_y_start + (i * line_height),
+                text=detail_text,
+                fill="#000000",
+                font=("Arial", 12, "bold"),
+                anchor="center",
             )
 
         # Response content section
         response_y = info_y_start + (len(details) * line_height) + 20
         canvas.create_text(
-            center_x, response_y,
+            center_x,
+            response_y,
             text="Response Content:",
             fill="#792D1B",
             font=("Arial", 14, "bold"),
-            anchor="center"
+            anchor="center",
         )
 
         # Response text area
@@ -1060,7 +1201,7 @@ class AdminFeedbackManager:
             state="disabled",
             bg="#E8F5E8",
             relief="solid",
-            bd=1
+            bd=1,
         )
         response_text.pack(fill="both", expand=True, padx=10, pady=10)
         response_text.config(state="normal")
@@ -1077,7 +1218,7 @@ class AdminFeedbackManager:
             relief="flat",
             command=canvas.master.destroy,
             width=15,
-            height=2
+            height=2,
         )
         close_button.place(x=center_x - 75, y=response_y + 250)
 
