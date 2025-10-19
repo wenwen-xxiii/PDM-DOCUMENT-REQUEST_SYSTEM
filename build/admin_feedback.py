@@ -17,6 +17,8 @@ import mysql.connector
 from mysql.connector import Error
 import sys
 import os
+import asyncio
+import threading
 from datetime import datetime
 
 # Add the parent directory to the path to import your modules
@@ -200,8 +202,8 @@ class AdminFeedbackManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_feedbacks(self):
-        """Load feedbacks from database with joins"""
+    async def load_feedbacks_async(self):
+        """Load feedbacks from database with joins (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -246,6 +248,22 @@ class AdminFeedbackManager:
                 "Database Error", f"Failed to load feedbacks: {str(e)}"
             )
             self.feedbacks = []
+
+    def load_feedbacks(self):
+        """Load feedbacks from database with joins (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_feedbacks_async())
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.load_feedbacks_async())
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.load_feedbacks_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -890,20 +908,35 @@ class AdminFeedbackManager:
             messagebox.showerror("Error", "Please enter a response")
             return
 
-        success = self.submit_feedback_response(
-            feedback["feedback_id"], response_content
-        )
+        # Use threading to avoid blocking UI
+        def submit_thread():
+            try:
+                success = self.submit_feedback_response(
+                    feedback["feedback_id"], response_content
+                )
 
-        if success:
-            canvas.master.destroy()
-            self.load_feedbacks()
-            self.update_display()
-            messagebox.showinfo("Success", "Response submitted successfully")
-        else:
-            messagebox.showerror("Error", "Failed to submit response")
+                # Schedule UI update on main thread
+                def update_ui():
+                    if success:
+                        canvas.master.destroy()
+                        self.load_feedbacks()
+                        self.update_display()
+                        messagebox.showinfo("Success", "Response submitted successfully")
+                    else:
+                        messagebox.showerror("Error", "Failed to submit response")
+                
+                self.parent.after(0, update_ui)
+                
+            except Exception as e:
+                print(f"❌ Error submitting response: {e}")
+                self.parent.after(0, lambda: messagebox.showerror("Error", f"Failed to submit response: {str(e)}"))
+        
+        # Run submit in background thread
+        submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)
+        submit_thread_obj.start()
 
-    def submit_feedback_response(self, feedback_id, response_content):
-        """Submit feedback response to database and send email notification"""
+    async def submit_feedback_response_async(self, feedback_id, response_content):
+        """Submit feedback response to database and send email notification (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -963,8 +996,8 @@ class AdminFeedbackManager:
             cursor.close()
             connection.close()
 
-            # Send email notification to student
-            self.send_feedback_response_email(
+            # Send email notification to student (async)
+            await self.send_feedback_response_email_async(
                 feedback_data, response_content, staff_name
             )
 
@@ -975,8 +1008,24 @@ class AdminFeedbackManager:
             print(f"❌ Error submitting response: {e}")
             return False
 
-    def send_feedback_response_email(self, feedback_data, response_content, staff_name):
-        """Send feedback response email to student"""
+    def submit_feedback_response(self, feedback_id, response_content):
+        """Submit feedback response to database and send email notification (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.submit_feedback_response_async(feedback_id, response_content))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.submit_feedback_response_async(feedback_id, response_content))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.submit_feedback_response_async(feedback_id, response_content))
+
+    async def send_feedback_response_email_async(self, feedback_data, response_content, staff_name):
+        """Send feedback response email to student (async version)"""
         try:
             student_email = feedback_data["student_email"]
             if not student_email:
@@ -1042,8 +1091,8 @@ class AdminFeedbackManager:
             </html>
             """
 
-            # Send email
-            success = self.email_service._send_email_sync(student_email, subject, body)
+            # Send email using async method
+            success = await self.email_service._send_email(student_email, subject, body)
 
             if success:
                 print(f"✅ Feedback response email sent to {student_email}")
@@ -1059,6 +1108,22 @@ class AdminFeedbackManager:
         except Exception as e:
             print(f"❌ Error sending feedback response email: {e}")
             return False
+
+    def send_feedback_response_email(self, feedback_data, response_content, staff_name):
+        """Send feedback response email to student (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
 
     def _fallback_feedback_email(
         self, student_email, subject, response_content, feedback_data
@@ -1272,9 +1337,20 @@ class AdminFeedbackManager:
         """Refresh the feedbacks list"""
         print("🔄 Refreshing feedbacks...")
         try:
-            self.load_feedbacks()
-            self.current_page = 1
-            self.update_display()
-            print(f"✅ Refresh complete - {len(self.feedbacks)} feedbacks loaded")
+            # Use threading to avoid blocking UI
+            def refresh_thread():
+                try:
+                    self.load_feedbacks()
+                    self.current_page = 1
+                    # Schedule UI update on main thread
+                    self.parent.after(0, self.update_display)
+                    print(f"✅ Refresh complete - {len(self.feedbacks)} feedbacks loaded")
+                except Exception as e:
+                    print(f"❌ Error during refresh: {e}")
+            
+            # Run refresh in background thread
+            refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+            refresh_thread_obj.start()
+            
         except Exception as e:
             print(f"❌ Error during refresh: {e}")

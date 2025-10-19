@@ -878,21 +878,3 @@ def open_document_attachment_viewer(parent, request_id, get_db_connection):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to open attachment viewer: {str(e)}")
         return None
-
-if __name__ == "__main__":
-    # Test the viewer
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    
-    def get_db_connection():
-        try:
-            return mysql.connector.connect(**DB_CONFIG)
-        except Error as e:
-            print(f"Database connection error: {e}")
-            return None
-    
-    # Test with a sample request ID
-    viewer = open_document_attachment_viewer(root, 1, get_db_connection)
-    
-    if viewer:
-        root.mainloop()

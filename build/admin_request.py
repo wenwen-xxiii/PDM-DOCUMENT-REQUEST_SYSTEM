@@ -5,8 +5,9 @@ import mysql.connector
 from mysql.connector import Error
 import sys
 import os
-from datetime import datetime
+import asyncio
 import threading
+from datetime import datetime
 import base64
 
 # Add the parent directory to the path to import your modules
@@ -197,8 +198,8 @@ class AdminRequestManager:
         # )
         # self.button_refresh.place(x=570, y=530, width=80, height=30)
 
-    def load_document_requests(self):
-        """Load document requests from database using your schema"""
+    async def load_document_requests_async(self):
+        """Load document requests from database using your schema (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -246,6 +247,22 @@ class AdminRequestManager:
             print(f"❌ Error loading document requests: {e}")
             messagebox.showerror("Database Error", f"Failed to load document requests: {str(e)}")
             self.document_requests = []
+
+    def load_document_requests(self):
+        """Load document requests from database using your schema (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_document_requests_async())
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.load_document_requests_async())
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.load_document_requests_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -510,20 +527,20 @@ class AdminRequestManager:
             print(f"❌ Error loading document attachments: {e}")
             return []
 
-    def send_email_notification(self, student_email, subject, body, attachments=None):
-        """Send email notification to student using enhanced email service"""
+    async def send_email_notification_async(self, student_email, subject, body, attachments=None):
+        """Send email notification to student using enhanced email service (async version)"""
         try:
             if attachments:
                 # Use the enhanced email service with attachments
-                success = email_service.send_email_with_attachments_sync(
+                success = await email_service.send_email_with_attachments(
                     student_email, 
                     subject, 
                     body, 
                     attachments
                 )
             else:
-                # Use regular email service - remove the is_html parameter
-                success = email_service._send_email_sync(
+                # Use regular email service
+                success = await email_service._send_email(
                     student_email, 
                     subject, 
                     body
@@ -541,6 +558,22 @@ class AdminRequestManager:
         except Exception as e:
             print(f"❌ PDM Email error: {e}")
             return False
+
+    def send_email_notification(self, student_email, subject, body, attachments=None):
+        """Send email notification to student using enhanced email service (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_email_notification_async(student_email, subject, body, attachments))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_email_notification_async(student_email, subject, body, attachments))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_email_notification_async(student_email, subject, body, attachments))
     
     def _fallback_email_notification(self, student_email, subject, body, attachments=None):
         """Fallback email notification method"""
@@ -812,8 +845,8 @@ class AdminRequestManager:
         
         return subject, body
 
-    def send_document_ready_email(self, request):
-        """Send email with document attachments when document is ready"""
+    async def send_document_ready_email_async(self, request):
+        """Send email with document attachments when document is ready (async version)"""
         try:
             # Get attachments from database
             attachments = self.get_document_attachments(request['request_id'])
@@ -832,8 +865,8 @@ class AdminRequestManager:
                 # Create email content
                 subject, body = self.create_notification_message(request, "completed", has_attachments=True)
                 
-                # Send email with attachments
-                success = self.send_email_notification(
+                # Send email with attachments (async)
+                success = await self.send_email_notification_async(
                     request.get('student_email'), 
                     subject, 
                     body, 
@@ -849,11 +882,27 @@ class AdminRequestManager:
             else:
                 # No attachments, send regular notification
                 subject, body = self.create_notification_message(request, "completed")
-                return self.send_email_notification(request.get('student_email'), subject, body)
+                return await self.send_email_notification_async(request.get('student_email'), subject, body)
                 
         except Exception as e:
             print(f"❌ Error sending document ready email: {e}")
             return False
+
+    def send_document_ready_email(self, request):
+        """Send email with document attachments when document is ready (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_document_ready_email_async(request))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_document_ready_email_async(request))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_document_ready_email_async(request))
 
     def view_request(self, request):
         """View request details and attachments"""
@@ -1179,9 +1228,9 @@ class AdminRequestManager:
         
         return base_status
 
-    def _update_request_status_in_db(self, request_id, status=None, payment_status=None,
+    async def _update_request_status_in_db_async(self, request_id, status=None, payment_status=None,
                                      processed_date=None, ready_date=None, completed_date=None):
-        """Helper to update a document_requests row and refresh local cache/UI."""
+        """Helper to update a document_requests row and refresh local cache/UI (async version)."""
         try:
             conn = self.get_db_connection()
             if not conn:
@@ -1215,12 +1264,32 @@ class AdminRequestManager:
             conn.commit()
             cursor.close()
             conn.close()
-            self.load_document_requests()
-            self.update_display()
+            
+            # Reload data and update display
+            await self.load_document_requests_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self.update_display)
             return True
         except Exception as e:
             print(f"❌ Failed to update request #{request_id}: {e}")
             return False
+
+    def _update_request_status_in_db(self, request_id, status=None, payment_status=None,
+                                     processed_date=None, ready_date=None, completed_date=None):
+        """Helper to update a document_requests row and refresh local cache/UI (sync wrapper)."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
 
     def approve_payment(self, request):
         """Approve payment and set status to processing"""
@@ -1230,21 +1299,40 @@ class AdminRequestManager:
                              f"Document: {request['document_name']}\n"
                              f"Amount: ₱{request.get('total_amount', 0):.2f}"):
             
-            request_id = request['request_id']
-            now = datetime.now()
-            updated = self._update_request_status_in_db(
-                request_id,
-                status='processing',
-                payment_status='paid',
-                processed_date=now
-            )
-            if updated:
-                print(f"✅ Payment approved for request {request['request_number']}")
-                subject, body = self.create_notification_message(request, "payment_approved")
-                self.send_email_notification(request.get('student_email'), subject, body)
-                messagebox.showinfo("Success", f"Payment approved for request {request['request_number']}")
-            else:
-                messagebox.showerror("Update Error", "Failed to approve payment.")
+            # Use threading to avoid blocking UI
+            def approve_thread():
+                try:
+                    request_id = request['request_id']
+                    now = datetime.now()
+                    updated = self._update_request_status_in_db(
+                        request_id,
+                        status='processing',
+                        payment_status='paid',
+                        processed_date=now
+                    )
+                    
+                    # Schedule UI update on main thread
+                    def update_ui():
+                        if updated:
+                            print(f"✅ Payment approved for request {request['request_number']}")
+                            subject, body = self.create_notification_message(request, "payment_approved")
+                            # Send email in background thread
+                            def email_thread():
+                                self.send_email_notification(request.get('student_email'), subject, body)
+                            threading.Thread(target=email_thread, daemon=True).start()
+                            messagebox.showinfo("Success", f"Payment approved for request {request['request_number']}")
+                        else:
+                            messagebox.showerror("Update Error", "Failed to approve payment.")
+                    
+                    self.parent.after(0, update_ui)
+                    
+                except Exception as e:
+                    print(f"❌ Error approving payment: {e}")
+                    self.parent.after(0, lambda: messagebox.showerror("Error", f"Failed to approve payment: {str(e)}"))
+            
+            # Run approve in background thread
+            approve_thread_obj = threading.Thread(target=approve_thread, daemon=True)
+            approve_thread_obj.start()
 
     def mark_ready(self, request):
         """Mark request as ready"""
@@ -1253,36 +1341,66 @@ class AdminRequestManager:
                              f"Student: {request['student_name']}\n"
                              f"Document: {request['document_name']}"):
             
-            request_id = request['request_id']
-            delivery_mode = request.get('delivery_mode', 'pickup')
-            now = datetime.now()
-            
-            if delivery_mode == 'online':
-                success = self._update_request_status_in_db(
-                    request_id,
-                    status='completed',
-                    ready_date=now,
-                    completed_date=now
-                )
-                if success:
-                    print(f"✅ Request {request['request_number']} completed (online delivery).")
-                    # For online delivery, send email with attachments
-                    email_success = self.send_document_ready_email(request)
-                    if email_success:
-                        messagebox.showinfo("Success", f"Request {request['request_number']} marked as completed and email sent with document")
+            # Use threading to avoid blocking UI
+            def mark_ready_thread():
+                try:
+                    request_id = request['request_id']
+                    delivery_mode = request.get('delivery_mode', 'pickup')
+                    now = datetime.now()
+                    
+                    if delivery_mode == 'online':
+                        success = self._update_request_status_in_db(
+                            request_id,
+                            status='completed',
+                            ready_date=now,
+                            completed_date=now
+                        )
+                        
+                        # Schedule UI update on main thread
+                        def update_ui():
+                            if success:
+                                print(f"✅ Request {request['request_number']} completed (online delivery).")
+                                # For online delivery, send email with attachments in background thread
+                                def email_thread():
+                                    email_success = self.send_document_ready_email(request)
+                                    if email_success:
+                                        self.parent.after(0, lambda: messagebox.showinfo("Success", f"Request {request['request_number']} marked as completed and email sent with document"))
+                                    else:
+                                        self.parent.after(0, lambda: messagebox.showwarning("Partial Success", f"Request {request['request_number']} marked as completed but email failed to send"))
+                                threading.Thread(target=email_thread, daemon=True).start()
+                            else:
+                                messagebox.showerror("Update Error", "Failed to mark request as completed.")
+                        
+                        self.parent.after(0, update_ui)
                     else:
-                        messagebox.showwarning("Partial Success", f"Request {request['request_number']} marked as completed but email failed to send")
-            else:
-                success = self._update_request_status_in_db(
-                    request_id,
-                    status='ready_for_pickup',
-                    ready_date=now
-                )
-                if success:
-                    print(f"✅ Request {request['request_number']} marked ready for pickup.")
-                    subject, body = self.create_notification_message(request, "ready")
-                    self.send_email_notification(request.get('student_email'), subject, body)
-                    messagebox.showinfo("Success", f"Request {request['request_number']} marked as ready for pickup")
+                        success = self._update_request_status_in_db(
+                            request_id,
+                            status='ready_for_pickup',
+                            ready_date=now
+                        )
+                        
+                        # Schedule UI update on main thread
+                        def update_ui():
+                            if success:
+                                print(f"✅ Request {request['request_number']} marked ready for pickup.")
+                                subject, body = self.create_notification_message(request, "ready")
+                                # Send email in background thread
+                                def email_thread():
+                                    self.send_email_notification(request.get('student_email'), subject, body)
+                                threading.Thread(target=email_thread, daemon=True).start()
+                                messagebox.showinfo("Success", f"Request {request['request_number']} marked as ready for pickup")
+                            else:
+                                messagebox.showerror("Update Error", "Failed to mark request as ready.")
+                        
+                        self.parent.after(0, update_ui)
+                    
+                except Exception as e:
+                    print(f"❌ Error marking ready: {e}")
+                    self.parent.after(0, lambda: messagebox.showerror("Error", f"Failed to mark request as ready: {str(e)}"))
+            
+            # Run mark ready in background thread
+            mark_ready_thread_obj = threading.Thread(target=mark_ready_thread, daemon=True)
+            mark_ready_thread_obj.start()
 
     def complete_request(self, request):
         """Complete request (for pickup delivery)"""
@@ -1291,24 +1409,42 @@ class AdminRequestManager:
                              f"Student: {request['student_name']}\n"
                              f"Document: {request['document_name']}"):
             
-            request_id = request['request_id']
-            now = datetime.now()
-            success = self._update_request_status_in_db(
-                request_id,
-                status='completed',
-                completed_date=now
-            )
-            if success:
-                print(f"✅ Request {request['request_number']} marked completed.")
-                # For pickup completion, send notification without attachments
-                subject, body = self.create_notification_message(request, "completed")
-                email_success = self.send_email_notification(request.get('student_email'), subject, body)
-                if email_success:
-                    messagebox.showinfo("Success", f"Request {request['request_number']} marked as completed and notification sent")
-                else:
-                    messagebox.showwarning("Partial Success", f"Request {request['request_number']} marked as completed but notification failed to send")
-            else:
-                messagebox.showerror("Update Error", "Failed to mark request as completed.")
+            # Use threading to avoid blocking UI
+            def complete_thread():
+                try:
+                    request_id = request['request_id']
+                    now = datetime.now()
+                    success = self._update_request_status_in_db(
+                        request_id,
+                        status='completed',
+                        completed_date=now
+                    )
+                    
+                    # Schedule UI update on main thread
+                    def update_ui():
+                        if success:
+                            print(f"✅ Request {request['request_number']} marked completed.")
+                            # For pickup completion, send notification without attachments in background thread
+                            def email_thread():
+                                subject, body = self.create_notification_message(request, "completed")
+                                email_success = self.send_email_notification(request.get('student_email'), subject, body)
+                                if email_success:
+                                    self.parent.after(0, lambda: messagebox.showinfo("Success", f"Request {request['request_number']} marked as completed and notification sent"))
+                                else:
+                                    self.parent.after(0, lambda: messagebox.showwarning("Partial Success", f"Request {request['request_number']} marked as completed but notification failed to send"))
+                            threading.Thread(target=email_thread, daemon=True).start()
+                        else:
+                            messagebox.showerror("Update Error", "Failed to mark request as completed.")
+                    
+                    self.parent.after(0, update_ui)
+                    
+                except Exception as e:
+                    print(f"❌ Error completing request: {e}")
+                    self.parent.after(0, lambda: messagebox.showerror("Error", f"Failed to complete request: {str(e)}"))
+            
+            # Run complete in background thread
+            complete_thread_obj = threading.Thread(target=complete_thread, daemon=True)
+            complete_thread_obj.start()
 
     def upload_document(self, request):
         """Handle document upload for a request with refresh callback"""
@@ -1378,9 +1514,20 @@ class AdminRequestManager:
         """Refresh the requests list"""
         print("🔄 Refreshing admin requests...")
         try:
-            self.load_document_requests()
-            self.current_page = 1
-            self.update_display()
-            print(f"✅ Refresh complete - {len(self.document_requests)} requests loaded")
+            # Use threading to avoid blocking UI
+            def refresh_thread():
+                try:
+                    self.load_document_requests()
+                    self.current_page = 1
+                    # Schedule UI update on main thread
+                    self.parent.after(0, self.update_display)
+                    print(f"✅ Refresh complete - {len(self.document_requests)} requests loaded")
+                except Exception as e:
+                    print(f"❌ Error during refresh: {e}")
+            
+            # Run refresh in background thread
+            refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+            refresh_thread_obj.start()
+            
         except Exception as e:
             print(f"❌ Error during refresh: {e}")

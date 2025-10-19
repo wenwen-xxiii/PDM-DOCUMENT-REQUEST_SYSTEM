@@ -6,6 +6,8 @@ import mysql.connector
 from datetime import datetime, timedelta
 import sys
 import os
+import asyncio
+import threading
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -318,8 +320,8 @@ class DocumentRequestWindow:
         # Bind window close event
         self.window.protocol("WM_DELETE_WINDOW", self.go_back)
 
-    def load_document_types(self):
-        """Load available document types from database"""
+    async def load_document_types_async(self):
+        """Load available document types from database (async version)"""
         try:
             connection = mysql.connector.connect(**DB_CONFIG)
             cursor = connection.cursor(dictionary=True)
@@ -348,6 +350,22 @@ class DocumentRequestWindow:
             messagebox.showerror("Database Error", f"Failed to load document types: {str(e)}")
             # Add default values if database fails
             self.combobox_docType['values'] = ["COE - Certificate of Enrollment (₱100.00)"]
+
+    def load_document_types(self):
+        """Load available document types from database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.load_document_types_async())
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.load_document_types_async())
 
     def on_document_type_selected(self, event):
         """Handle document type selection"""
@@ -460,8 +478,8 @@ class DocumentRequestWindow:
         
         return errors
 
-    def submit_request(self):
-        """Submit the document request"""
+    async def submit_request_async(self):
+        """Submit the document request (async version)"""
         # Validate form
         errors = self.validate_form()
         if errors:
@@ -548,6 +566,28 @@ class DocumentRequestWindow:
             if connection and connection.is_connected():
                 cursor.close()
                 connection.close()
+
+    def submit_request(self):
+        """Submit the document request (sync wrapper)"""
+        # Use threading to avoid blocking UI
+        def submit_thread():
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If we're already in an async context, run in thread
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.submit_request_async())
+                        return future.result()
+                else:
+                    return loop.run_until_complete(self.submit_request_async())
+            except RuntimeError:
+                # No event loop running, create a new one
+                return asyncio.run(self.submit_request_async())
+        
+        # Run submit in background thread
+        submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)
+        submit_thread_obj.start()
 
     def show_success_message(self, request_number, quantity):
         """Show success message with request details"""

@@ -1,6 +1,8 @@
 # admin_upload_docu.py - Admin Upload Document with Email Attachment
 import os
 import sys
+import asyncio
+import threading
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, Toplevel, messagebox, filedialog
 import mysql.connector
@@ -197,8 +199,8 @@ class AdminUploadDocumentWindow:
         )
         self.button_browse.place(x=45.0, y=338.0, width=116.0, height=39.0)
 
-    def load_document_types(self):
-        """Load available document types from database"""
+    async def load_document_types_async(self):
+        """Load available document types from database (async version)"""
         try:
             connection = mysql.connector.connect(**DB_CONFIG)
             cursor = connection.cursor(dictionary=True)
@@ -217,6 +219,22 @@ class AdminUploadDocumentWindow:
             
         except mysql.connector.Error as e:
             messagebox.showerror("Database Error", f"Failed to load document types: {str(e)}")
+
+    def load_document_types(self):
+        """Load available document types from database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.load_document_types_async())
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.load_document_types_async())
 
     def populate_form(self):
         """Populate form with request data if available"""
@@ -359,8 +377,8 @@ class AdminUploadDocumentWindow:
         
         return subject, body
 
-    def send_document_email(self, student_email, subject, body, attachment_path, request_id):
-        """Send email with document attachment using your existing email service"""
+    async def send_document_email_async(self, student_email, subject, body, attachment_path, request_id):
+        """Send email with document attachment using your existing email service (async version)"""
         try:
             # Read the file data
             with open(attachment_path, 'rb') as file:
@@ -375,8 +393,8 @@ class AdminUploadDocumentWindow:
                 'file_type': self.get_file_type(file_name)
             }]
             
-            # Use your existing email service to send with attachments
-            success = email_service.send_email_with_attachments_sync(
+            # Use your existing email service to send with attachments (async)
+            success = await email_service.send_email_with_attachments(
                 student_email, 
                 subject, 
                 body, 
@@ -388,12 +406,28 @@ class AdminUploadDocumentWindow:
                 return True
             else:
                 print(f"❌ Failed to send email with attachment via email_service")
-                return self.send_fallback_notification(student_email, subject, body, file_name)
+                return await self.send_fallback_notification_async(student_email, subject, body, file_name)
                 
         except Exception as e:
             print(f"❌ Error sending email with attachment: {str(e)}")
             file_name = os.path.basename(attachment_path)
-            return self.send_fallback_notification(student_email, subject, body, file_name)
+            return await self.send_fallback_notification_async(student_email, subject, body, file_name)
+
+    def send_document_email(self, student_email, subject, body, attachment_path, request_id):
+        """Send email with document attachment using your existing email service (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
 
     def get_file_type(self, filename):
         """Determine file type based on extension"""
@@ -409,8 +443,8 @@ class AdminUploadDocumentWindow:
         }
         return file_types.get(extension, 'application/octet-stream')
 
-    def send_fallback_notification(self, student_email, subject, body, attachment_name):
-        """Fallback notification when email with attachment fails"""
+    async def send_fallback_notification_async(self, student_email, subject, body, attachment_name):
+        """Fallback notification when email with attachment fails (async version)"""
         try:
             # Convert HTML body to plain text for fallback
             plain_body = re.sub(r'<[^<]+?>', '', body)  # Remove HTML tags
@@ -426,8 +460,8 @@ Best regards,
 PDM Registrar's Office
 """
             
-            # Use your existing email service for fallback (without attachment)
-            success = email_service._send_email_sync(student_email, subject, enhanced_body)
+            # Use your existing email service for fallback (without attachment) - async
+            success = await email_service._send_email(student_email, subject, enhanced_body)
             
             if success:
                 print(f"✅ Fallback notification sent to {student_email}")
@@ -442,6 +476,22 @@ PDM Registrar's Office
             self._print_fallback_notification(student_email, subject, body, attachment_name)
             return False
 
+    def send_fallback_notification(self, student_email, subject, body, attachment_name):
+        """Fallback notification when email with attachment fails (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, run in thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_fallback_notification_async(student_email, subject, body, attachment_name))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_fallback_notification_async(student_email, subject, body, attachment_name))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_fallback_notification_async(student_email, subject, body, attachment_name))
+
     def _print_fallback_notification(self, student_email, subject, body, attachment_name):
         """Print notification as last resort when all email methods fail"""
         print("=" * 70)
@@ -453,8 +503,8 @@ PDM Registrar's Office
         print(f"Body: {body}")
         print("=" * 70)
 
-    def submit_document(self):
-        """Submit the uploaded document and send email with attachment"""
+    async def submit_document_async(self):
+        """Submit the uploaded document and send email with attachment (async version)"""
         # Validation
         if not self.entry_request_no.get().strip():
             messagebox.showerror("Error", "Request number is required")
@@ -557,13 +607,13 @@ PDM Registrar's Office
                 'delivery_mode': delivery_mode
             }
             
-            # Send email notification
+            # Send email notification (async)
             subject, body = self.create_email_content(request_data, remarks)
             email_sent = False
             
             if delivery_mode == 'online':
                 # Send email with attachment for online delivery
-                email_sent = self.send_document_email(
+                email_sent = await self.send_document_email_async(
                     student_email, 
                     subject, 
                     body, 
@@ -572,7 +622,7 @@ PDM Registrar's Office
                 )
             else:
                 # Send regular email for pickup (without attachment)
-                email_sent = self.send_fallback_notification(
+                email_sent = await self.send_fallback_notification_async(
                     student_email,
                     subject,
                     body,
@@ -610,6 +660,28 @@ Document uploaded successfully!
             if 'connection' in locals() and connection.is_connected():
                 cursor.close()
                 connection.close()
+
+    def submit_document(self):
+        """Submit the uploaded document and send email with attachment (sync wrapper)"""
+        # Use threading to avoid blocking UI
+        def submit_thread():
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If we're already in an async context, run in thread
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.submit_document_async())
+                        return future.result()
+                else:
+                    return loop.run_until_complete(self.submit_document_async())
+            except RuntimeError:
+                # No event loop running, create a new one
+                return asyncio.run(self.submit_document_async())
+        
+        # Run submit in background thread
+        submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)
+        submit_thread_obj.start()
 
     def go_back(self):
         """Close the window"""
