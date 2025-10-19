@@ -6,6 +6,9 @@ from mysql.connector import Error
 import sys
 import os
 from datetime import datetime
+import asyncio
+import threading
+import concurrent.futures
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,6 +44,9 @@ class AdminDocumentManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
+        
+        # Loading indicator
+        self.loading_label = None
         
         self.setup_ui()
         self.load_document_types()
@@ -196,8 +202,8 @@ class AdminDocumentManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_document_types(self):
-        """Load document types from database"""
+    async def load_document_types_async(self):
+        """Load document types from database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -236,6 +242,29 @@ class AdminDocumentManager:
             print(f"❌ Error loading document types: {e}")
             messagebox.showerror("Database Error", f"Failed to load document types: {str(e)}")
             self.document_types = []
+
+    def load_document_types(self):
+        """Load document types from database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_document_types: {e}")
+                return asyncio.run(self.load_document_types_async())
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_document_types: {e}")
+                return asyncio.run(self.load_document_types_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -546,19 +575,50 @@ class AdminDocumentManager:
                 messagebox.showerror("Error", "Fee amount and processing days must be valid numbers")
                 return
             
-            if document:
-                # Update existing document
-                success = self.update_document_type(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance)
-            else:
-                # Add new document
-                success = self.add_new_document_type(code, name, fee_amount, processing_days, description, is_available, requires_clearance)
+            # Show loading indicator
+            dialog.show_loading_indicator = lambda msg: None  # Disable loading for dialog
+            self.show_loading_indicator("Saving document...")
             
-            if success:
-                dialog.destroy()
-                self.load_document_types()
-                self.update_display()
-            else:
-                messagebox.showerror("Error", "Failed to save document type")
+            # Use threading to avoid blocking UI
+            def save_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            if document:
+                                future = executor.submit(asyncio.run, self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            else:
+                                future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_document: {e}")
+                        if document:
+                            result = asyncio.run(self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                        else:
+                            result = asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            if document:
+                                future = executor.submit(asyncio.run, self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            else:
+                                future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_document: {e}")
+                        if document:
+                            result = asyncio.run(self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                        else:
+                            result = asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                
+                # Schedule UI update on main thread
+                self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
+            
+            save_thread_obj = threading.Thread(target=save_thread, daemon=True)
+            save_thread_obj.start()
         
         def cancel_form():
             dialog.destroy()
@@ -568,9 +628,22 @@ class AdminDocumentManager:
                relief="flat", command=save_document).place(x=140, y=580, width=100, height=35)
         Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
                relief="flat", command=cancel_form).place(x=260, y=580, width=100, height=35)
+    
+    def _update_ui_after_save(self, success, dialog):
+        """Update UI after save operation completes"""
+        try:
+            self.hide_loading_indicator()
+            if success:
+                dialog.destroy()
+                self.load_document_types()
+                self.update_display()
+            else:
+                messagebox.showerror("Error", "Failed to save document type")
+        except Exception as e:
+            print(f"❌ Error during UI update after save: {e}")
 
-    def add_new_document_type(self, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
-        """Add new document type to database"""
+    async def add_new_document_type_async(self, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
+        """Add new document type to database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -594,8 +667,31 @@ class AdminDocumentManager:
             print(f"❌ Error adding document type: {e}")
             return False
 
-    def update_document_type(self, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
-        """Update existing document type in database"""
+    def add_new_document_type(self, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
+        """Add new document type to database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async add_new_document_type: {e}")
+                return asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async add_new_document_type: {e}")
+                return asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+
+    async def update_document_type_async(self, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
+        """Update existing document type in database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -620,39 +716,95 @@ class AdminDocumentManager:
             print(f"❌ Error updating document type: {e}")
             return False
 
+    def update_document_type(self, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
+        """Update existing document type in database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_document_type: {e}")
+                return asyncio.run(self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_document_type: {e}")
+                return asyncio.run(self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+
+    async def toggle_document_status_async(self, document):
+        """Toggle document type active status (async version)"""
+        new_status = not document['is_available']
+        
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
+                
+            cursor = connection.cursor()
+            
+            cursor.execute("""
+                UPDATE document_types 
+                SET is_available = %s, updated_at = %s
+                WHERE document_type_id = %s
+            """, (new_status, datetime.now(), document['document_type_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Document type {document['code']} status changed to {'active' if new_status else 'inactive'}")
+            await self.load_document_types_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self.update_display)
+            
+        except Error as e:
+            print(f"❌ Error toggling document status: {e}")
+            messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+
     def toggle_document_status(self, document):
-        """Toggle document type active status"""
+        """Toggle document type active status (sync wrapper)"""
         new_status = not document['is_available']
         status_text = "activate" if new_status else "deactivate"
         
         if messagebox.askyesno("Toggle Status", 
                              f"{status_text.title()} document type '{document['code']}'?"):
             
-            try:
-                connection = self.get_db_connection()
-                if not connection:
-                    messagebox.showerror("Database Error", "Could not connect to database")
-                    return
-                    
-                cursor = connection.cursor()
-                
-                cursor.execute("""
-                    UPDATE document_types 
-                    SET is_available = %s, updated_at = %s
-                    WHERE document_type_id = %s
-                """, (new_status, datetime.now(), document['document_type_id']))
-                
-                connection.commit()
-                cursor.close()
-                connection.close()
-                
-                print(f"✅ Document type {document['code']} status changed to {'active' if new_status else 'inactive'}")
-                self.load_document_types()
-                self.update_display()
-                
-            except Error as e:
-                print(f"❌ Error toggling document status: {e}")
-                messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+            self.show_loading_indicator(f"{status_text.title()}ing document...")
+            
+            # Use threading to avoid blocking UI
+            def toggle_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.toggle_document_status_async(document))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async toggle_document_status: {e}")
+                        return asyncio.run(self.toggle_document_status_async(document))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.toggle_document_status_async(document))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async toggle_document_status: {e}")
+                        return asyncio.run(self.toggle_document_status_async(document))
+            
+            toggle_thread_obj = threading.Thread(target=toggle_thread, daemon=True)
+            toggle_thread_obj.start()
 
     def show_no_documents_message(self):
         """Show message when no document types exist"""
@@ -686,12 +838,65 @@ class AdminDocumentManager:
             self.update_display()
 
     def refresh_documents(self):
-        """Refresh the document types list"""
+        """Refresh the document types list (async version)"""
         print("🔄 Refreshing document types...")
+        self.show_loading_indicator("Refreshing documents...")
+        
+        # Use threading to avoid blocking UI
+        def refresh_thread():
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop running, create a new one
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_document_types_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_documents: {e}")
+                    result = asyncio.run(self.load_document_types_async())
+            else:
+                # Event loop exists, run in thread pool
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_document_types_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_documents: {e}")
+                    result = asyncio.run(self.load_document_types_async())
+            
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_refresh)
+        
+        refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+        refresh_thread_obj.start()
+    
+    def _update_ui_after_refresh(self):
+        """Update UI after async refresh completes"""
         try:
-            self.load_document_types()
+            self.hide_loading_indicator()
             self.current_page = 1
             self.update_display()
             print(f"✅ Refresh complete - {len(self.document_types)} document types loaded")
         except Exception as e:
-            print(f"❌ Error during refresh: {e}")
+            print(f"❌ Error during UI update after refresh: {e}")
+    
+    def show_loading_indicator(self, message="Loading..."):
+        """Show loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+        
+        self.loading_label = Label(
+            self.parent,
+            text=message,
+            font=("Inter", 12),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.loading_label.place(x=400, y=200)
+    
+    def hide_loading_indicator(self):
+        """Hide loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+            self.loading_label = None

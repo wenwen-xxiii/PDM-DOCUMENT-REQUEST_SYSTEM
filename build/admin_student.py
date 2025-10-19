@@ -6,6 +6,9 @@ from mysql.connector import Error
 import sys
 import os
 from datetime import datetime
+import asyncio
+import threading
+import concurrent.futures
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,6 +44,9 @@ class AdminStudentManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
+        
+        # Loading indicator
+        self.loading_label = None
         
         self.setup_ui()
         self.load_students()
@@ -207,8 +213,8 @@ class AdminStudentManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_students(self):
-        """Load students from database"""
+    async def load_students_async(self):
+        """Load students from database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -255,6 +261,29 @@ class AdminStudentManager:
             print(f"❌ Error loading students: {e}")
             messagebox.showerror("Database Error", f"Failed to load students: {str(e)}")
             self.students = []
+
+    def load_students(self):
+        """Load students from database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_students_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_students: {e}")
+                return asyncio.run(self.load_students_async())
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_students_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_students: {e}")
+                return asyncio.run(self.load_students_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -946,21 +975,49 @@ class AdminStudentManager:
                 messagebox.showerror("Error", "Student number, first name, last name, course, and year level are required")
                 return
             
-            if student:
-                # Update existing student
-                success = self.update_student(student['student_id'], first_name, last_name, middle_name, 
-                                            course, year_level, contact_number, address)
-            else:
-                # Add new student
-                success = self.add_new_student(student_number, first_name, last_name, middle_name, 
-                                            course, year_level, contact_number, address, email)
+            # Show loading indicator
+            self.show_loading_indicator("Saving student...")
             
-            if success:
-                dialog.destroy()
-                self.load_students()
-                self.update_display()
-            else:
-                messagebox.showerror("Error", "Failed to save student")
+            # Use threading to avoid blocking UI
+            def save_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            if student:
+                                future = executor.submit(asyncio.run, self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                            else:
+                                future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_student: {e}")
+                        if student:
+                            result = asyncio.run(self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                        else:
+                            result = asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            if student:
+                                future = executor.submit(asyncio.run, self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                            else:
+                                future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_student: {e}")
+                        if student:
+                            result = asyncio.run(self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                        else:
+                            result = asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                
+                # Schedule UI update on main thread
+                self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
+            
+            save_thread_obj = threading.Thread(target=save_thread, daemon=True)
+            save_thread_obj.start()
         
         def cancel_form():
             dialog.destroy()
@@ -970,6 +1027,19 @@ class AdminStudentManager:
                relief="flat", command=save_student).place(x=140, y=650, width=100, height=35)
         Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
                relief="flat", command=cancel_form).place(x=260, y=650, width=100, height=35)
+    
+    def _update_ui_after_save(self, success, dialog):
+        """Update UI after save operation completes"""
+        try:
+            self.hide_loading_indicator()
+            if success:
+                dialog.destroy()
+                self.load_students()
+                self.update_display()
+            else:
+                messagebox.showerror("Error", "Failed to save student")
+        except Exception as e:
+            print(f"❌ Error during UI update after save: {e}")
 
     def view_student_details(self, student):
         """Open student details dialog"""
@@ -1079,8 +1149,8 @@ class AdminStudentManager:
         """Open edit student dialog"""
         self.open_student_form(student)
 
-    def update_student(self, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address):
-        """Update student information in database"""
+    async def update_student_async(self, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address):
+        """Update student information in database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -1106,8 +1176,31 @@ class AdminStudentManager:
             print(f"❌ Error updating student: {e}")
             return False
 
-    def add_new_student(self, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email):
-        """Add new student to database"""
+    def update_student(self, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address):
+        """Update student information in database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_student: {e}")
+                return asyncio.run(self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_student: {e}")
+                return asyncio.run(self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+
+    async def add_new_student_async(self, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email):
+        """Add new student to database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -1143,8 +1236,60 @@ class AdminStudentManager:
             print(f"❌ Error adding student: {e}")
             return False
 
+    def add_new_student(self, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email):
+        """Add new student to database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async add_new_student: {e}")
+                return asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async add_new_student: {e}")
+                return asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+
+    async def change_enrollment_status_async(self, student, new_status):
+        """Change student enrollment status (async version)"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
+                
+            cursor = connection.cursor()
+            
+            cursor.execute("""
+                UPDATE students 
+                SET enrollment_status = %s
+                WHERE student_id = %s
+            """, (new_status, student['student_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Student {student['student_number']} status changed to {new_status}")
+            await self.load_students_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self.update_display)
+            
+        except Error as e:
+            print(f"❌ Error changing student status: {e}")
+            messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+
     def change_enrollment_status(self, student, new_status):
-        """Change student enrollment status"""
+        """Change student enrollment status (sync wrapper)"""
         status_text = "deactivate" if new_status == 'Inactive' else "reactivate"
         
         if messagebox.askyesno("Change Status", 
@@ -1152,31 +1297,33 @@ class AdminStudentManager:
                              f"Name: {student['first_name']} {student['last_name']}\n"
                              f"Course: {student['course']}"):
             
-            try:
-                connection = self.get_db_connection()
-                if not connection:
-                    messagebox.showerror("Database Error", "Could not connect to database")
-                    return
-                    
-                cursor = connection.cursor()
-                
-                cursor.execute("""
-                    UPDATE students 
-                    SET enrollment_status = %s
-                    WHERE student_id = %s
-                """, (new_status, student['student_id']))
-                
-                connection.commit()
-                cursor.close()
-                connection.close()
-                
-                print(f"✅ Student {student['student_number']} status changed to {new_status}")
-                self.load_students()
-                self.update_display()
-                
-            except Error as e:
-                print(f"❌ Error changing student status: {e}")
-                messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+            self.show_loading_indicator(f"{status_text.title()}ing student...")
+            
+            # Use threading to avoid blocking UI
+            def change_status_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.change_enrollment_status_async(student, new_status))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async change_enrollment_status: {e}")
+                        return asyncio.run(self.change_enrollment_status_async(student, new_status))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.change_enrollment_status_async(student, new_status))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async change_enrollment_status: {e}")
+                        return asyncio.run(self.change_enrollment_status_async(student, new_status))
+            
+            change_status_thread_obj = threading.Thread(target=change_status_thread, daemon=True)
+            change_status_thread_obj.start()
 
     def show_no_students_message(self):
         """Show message when no students exist"""
@@ -1210,12 +1357,65 @@ class AdminStudentManager:
             self.update_display()
 
     def refresh_students(self):
-        """Refresh the students list"""
+        """Refresh the students list (async version)"""
         print("🔄 Refreshing students...")
+        self.show_loading_indicator("Refreshing students...")
+        
+        # Use threading to avoid blocking UI
+        def refresh_thread():
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop running, create a new one
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_students_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_students: {e}")
+                    result = asyncio.run(self.load_students_async())
+            else:
+                # Event loop exists, run in thread pool
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_students_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_students: {e}")
+                    result = asyncio.run(self.load_students_async())
+            
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_refresh)
+        
+        refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+        refresh_thread_obj.start()
+    
+    def _update_ui_after_refresh(self):
+        """Update UI after async refresh completes"""
         try:
-            self.load_students()
+            self.hide_loading_indicator()
             self.current_page = 1
             self.update_display()
             print(f"✅ Refresh complete - {len(self.students)} students loaded")
         except Exception as e:
-            print(f"❌ Error during refresh: {e}")
+            print(f"❌ Error during UI update after refresh: {e}")
+    
+    def show_loading_indicator(self, message="Loading..."):
+        """Show loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+        
+        self.loading_label = Label(
+            self.parent,
+            text=message,
+            font=("Inter", 12),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.loading_label.place(x=400, y=200)
+    
+    def hide_loading_indicator(self):
+        """Hide loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+            self.loading_label = None

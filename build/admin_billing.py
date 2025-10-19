@@ -6,6 +6,9 @@ from mysql.connector import Error
 import sys
 import os
 from datetime import datetime
+import asyncio
+import threading
+import concurrent.futures
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -41,6 +44,9 @@ class AdminBillingManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
+        
+        # Loading indicator
+        self.loading_label = None
         
         self.setup_ui()
         self.load_payments()
@@ -178,8 +184,8 @@ class AdminBillingManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_payments(self):
-        """Load payments from database with related request and student info"""
+    async def load_payments_async(self):
+        """Load payments from database with related request and student info (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -226,6 +232,29 @@ class AdminBillingManager:
             print(f"❌ Error loading payments: {e}")
             messagebox.showerror("Database Error", f"Failed to load payments: {str(e)}")
             self.payments = []
+
+    def load_payments(self):
+        """Load payments from database with related request and student info (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_payments_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_payments: {e}")
+                return asyncio.run(self.load_payments_async())
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_payments_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_payments: {e}")
+                return asyncio.run(self.load_payments_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -498,94 +527,156 @@ class AdminBillingManager:
         )
         close_button.place(x=200, y=600, width=100, height=35)
 
+    async def approve_payment_async(self, payment):
+        """Approve a pending payment (async version)"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
+                
+            cursor = connection.cursor()
+            
+            # Update payment status
+            cursor.execute("""
+                UPDATE payments 
+                SET status = 'success', paid_at = %s, updated_at = %s
+                WHERE payment_id = %s
+            """, (datetime.now(), datetime.now(), payment['payment_id']))
+            
+            # Update document request payment status
+            cursor.execute("""
+                UPDATE document_requests 
+                SET payment_status = 'paid', payment_date = %s
+                WHERE request_id = %s
+            """, (datetime.now(), payment['request_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
+            messagebox.showinfo("Success", f"Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
+            
+            # Refresh the display
+            await self.load_payments_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_approve)
+            
+        except Error as e:
+            print(f"❌ Error approving payment: {e}")
+            messagebox.showerror("Database Error", f"Failed to approve payment: {str(e)}")
+
     def approve_payment(self, payment):
-        """Approve a pending payment"""
+        """Approve a pending payment (sync wrapper)"""
         if messagebox.askyesno("Approve Payment", 
                              f"Approve payment with reference {payment['reference_number'] or 'N/A'}?\n"
                              f"Student: {payment['student_name']}\n"
                              f"Amount: ₱{payment['amount']:.2f}"):
             
-            try:
-                connection = self.get_db_connection()
-                if not connection:
-                    messagebox.showerror("Database Error", "Could not connect to database")
-                    return
-                    
-                cursor = connection.cursor()
+            self.show_loading_indicator("Approving payment...")
+            
+            # Use threading to avoid blocking UI
+            def approve_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.approve_payment_async(payment))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async approve_payment: {e}")
+                        return asyncio.run(self.approve_payment_async(payment))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.approve_payment_async(payment))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async approve_payment: {e}")
+                        return asyncio.run(self.approve_payment_async(payment))
+            
+            approve_thread_obj = threading.Thread(target=approve_thread, daemon=True)
+            approve_thread_obj.start()
+
+    async def refund_payment_async(self, payment):
+        """Refund a successful payment (async version)"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
                 
-                # Update payment status
-                cursor.execute("""
-                    UPDATE payments 
-                    SET status = 'success', paid_at = %s, updated_at = %s
-                    WHERE payment_id = %s
-                """, (datetime.now(), datetime.now(), payment['payment_id']))
-                
-                # Update document request payment status
-                cursor.execute("""
-                    UPDATE document_requests 
-                    SET payment_status = 'paid', payment_date = %s
-                    WHERE request_id = %s
-                """, (datetime.now(), payment['request_id']))
-                
-                connection.commit()
-                cursor.close()
-                connection.close()
-                
-                print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
-                messagebox.showinfo("Success", f"Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
-                
-                # Refresh the display
-                self.load_payments()
-                self.update_display()
-                
-            except Error as e:
-                print(f"❌ Error approving payment: {e}")
-                messagebox.showerror("Database Error", f"Failed to approve payment: {str(e)}")
+            cursor = connection.cursor()
+            
+            # Update payment status
+            cursor.execute("""
+                UPDATE payments 
+                SET status = 'refunded', updated_at = %s
+                WHERE payment_id = %s
+            """, (datetime.now(), payment['payment_id']))
+            
+            # Update document request payment status
+            cursor.execute("""
+                UPDATE document_requests 
+                SET payment_status = 'refunded'
+                WHERE request_id = %s
+            """, (payment['request_id'],))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} refunded successfully")
+            messagebox.showinfo("Success", f"Payment {payment['reference_number'] or payment['payment_id']} refunded successfully")
+            
+            # Refresh the display
+            await self.load_payments_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_refund)
+            
+        except Error as e:
+            print(f"❌ Error refunding payment: {e}")
+            messagebox.showerror("Database Error", f"Failed to refund payment: {str(e)}")
 
     def refund_payment(self, payment):
-        """Refund a successful payment"""
+        """Refund a successful payment (sync wrapper)"""
         if messagebox.askyesno("Refund Payment", 
                              f"Refund payment with reference {payment['reference_number'] or 'N/A'}?\n"
                              f"Student: {payment['student_name']}\n"
                              f"Amount: ₱{payment['amount']:.2f}\n\n"
                              f"This action cannot be undone."):
             
-            try:
-                connection = self.get_db_connection()
-                if not connection:
-                    messagebox.showerror("Database Error", "Could not connect to database")
-                    return
-                    
-                cursor = connection.cursor()
-                
-                # Update payment status
-                cursor.execute("""
-                    UPDATE payments 
-                    SET status = 'refunded', updated_at = %s
-                    WHERE payment_id = %s
-                """, (datetime.now(), payment['payment_id']))
-                
-                # Update document request payment status
-                cursor.execute("""
-                    UPDATE document_requests 
-                    SET payment_status = 'refunded'
-                    WHERE request_id = %s
-                """, (payment['request_id'],))
-                
-                connection.commit()
-                cursor.close()
-                connection.close()
-                
-                print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} refunded successfully")
-                messagebox.showinfo("Success", f"Payment {payment['reference_number'] or payment['payment_id']} refunded successfully")
-                
-                # Refresh the display
-                self.load_payments()
-                self.update_display()
-                
-            except Error as e:
-                print(f"❌ Error refunding payment: {e}")
-                messagebox.showerror("Database Error", f"Failed to refund payment: {str(e)}")
+            self.show_loading_indicator("Processing refund...")
+            
+            # Use threading to avoid blocking UI
+            def refund_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.refund_payment_async(payment))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async refund_payment: {e}")
+                        return asyncio.run(self.refund_payment_async(payment))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.refund_payment_async(payment))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async refund_payment: {e}")
+                        return asyncio.run(self.refund_payment_async(payment))
+            
+            refund_thread_obj = threading.Thread(target=refund_thread, daemon=True)
+            refund_thread_obj.start()
 
     def show_no_payments_message(self):
         """Show message when no payments exist"""
@@ -619,12 +710,81 @@ class AdminBillingManager:
             self.update_display()
 
     def refresh_payments(self):
-        """Refresh the payments list"""
+        """Refresh the payments list (async version)"""
         print("🔄 Refreshing payments...")
+        self.show_loading_indicator("Refreshing payments...")
+        
+        # Use threading to avoid blocking UI
+        def refresh_thread():
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop running, create a new one
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_payments_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_payments: {e}")
+                    result = asyncio.run(self.load_payments_async())
+            else:
+                # Event loop exists, run in thread pool
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_payments_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_payments: {e}")
+                    result = asyncio.run(self.load_payments_async())
+            
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_refresh)
+        
+        refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+        refresh_thread_obj.start()
+    
+    def _update_ui_after_refresh(self):
+        """Update UI after async refresh completes"""
         try:
-            self.load_payments()
+            self.hide_loading_indicator()
             self.current_page = 1
             self.update_display()
             print(f"✅ Refresh complete - {len(self.payments)} payments loaded")
         except Exception as e:
-            print(f"❌ Error during refresh: {e}")
+            print(f"❌ Error during UI update after refresh: {e}")
+    
+    def show_loading_indicator(self, message="Loading..."):
+        """Show loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+        
+        self.loading_label = Label(
+            self.parent,
+            text=message,
+            font=("Inter", 12),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.loading_label.place(x=400, y=200)
+    
+    def hide_loading_indicator(self):
+        """Hide loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+            self.loading_label = None
+    
+    def _update_ui_after_approve(self):
+        """Update UI after approve operation completes"""
+        try:
+            self.hide_loading_indicator()
+            self.update_display()
+        except Exception as e:
+            print(f"❌ Error during UI update after approve: {e}")
+    
+    def _update_ui_after_refund(self):
+        """Update UI after refund operation completes"""
+        try:
+            self.hide_loading_indicator()
+            self.update_display()
+        except Exception as e:
+            print(f"❌ Error during UI update after refund: {e}")

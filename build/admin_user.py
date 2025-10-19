@@ -7,6 +7,9 @@ import sys
 import os
 from datetime import datetime
 from tkinter import ttk
+import asyncio
+import threading
+import concurrent.futures
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +45,9 @@ class AdminUserManager:
         # UI element storage
         self.images = []
         self.row_widgets = []
+        
+        # Loading indicator
+        self.loading_label = None
         
         self.setup_ui()
         self.load_users()
@@ -178,8 +184,8 @@ class AdminUserManager:
         )
         self.button_next.place(x=470, y=530, width=80, height=30)
 
-    def load_users(self):
-        """Load users from database"""
+    async def load_users_async(self):
+        """Load users from database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -215,6 +221,29 @@ class AdminUserManager:
             print(f"❌ Error loading users: {e}")
             messagebox.showerror("Database Error", f"Failed to load users: {str(e)}")
             self.users = []
+
+    def load_users(self):
+        """Load users from database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_users_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_users: {e}")
+                return asyncio.run(self.load_users_async())
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.load_users_async())
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async load_users: {e}")
+                return asyncio.run(self.load_users_async())
 
     def update_display(self):
         """Update the display with current page data"""
@@ -637,15 +666,37 @@ class AdminUserManager:
                     messagebox.showerror("Error", "Passwords do not match")
                     return
             
-            success = self.update_user(user['user_id'], email, user_type, is_verified, 
-                                     new_password if update_password else None)
+            # Show loading indicator
+            self.show_loading_indicator("Updating user...")
             
-            if success:
-                dialog.destroy()
-                self.load_users()
-                self.update_display()
-            else:
-                messagebox.showerror("Error", "Failed to update user")
+            # Use threading to avoid blocking UI
+            def save_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_user: {e}")
+                        result = asyncio.run(self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                            result = future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async save_user: {e}")
+                        result = asyncio.run(self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                
+                # Schedule UI update on main thread
+                self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
+            
+            save_thread_obj = threading.Thread(target=save_thread, daemon=True)
+            save_thread_obj.start()
         
         def cancel_form():
             dialog.destroy()
@@ -655,9 +706,22 @@ class AdminUserManager:
                relief="flat", command=save_user).place(x=140, y=600, width=100, height=35)
         Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
                relief="flat", command=cancel_form).place(x=260, y=600, width=100, height=35)
+    
+    def _update_ui_after_save(self, success, dialog):
+        """Update UI after save operation completes"""
+        try:
+            self.hide_loading_indicator()
+            if success:
+                dialog.destroy()
+                self.load_users()
+                self.update_display()
+            else:
+                messagebox.showerror("Error", "Failed to update user")
+        except Exception as e:
+            print(f"❌ Error during UI update after save: {e}")
 
-    def update_user(self, user_id, email, user_type, is_verified, new_password=None):
-        """Update user information in database"""
+    async def update_user_async(self, user_id, email, user_type, is_verified, new_password=None):
+        """Update user information in database (async version)"""
         try:
             connection = self.get_db_connection()
             if not connection:
@@ -693,8 +757,60 @@ class AdminUserManager:
             print(f"❌ Error updating user: {e}")
             return False
 
+    def update_user(self, user_id, email, user_type, is_verified, new_password=None):
+        """Update user information in database (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_user: {e}")
+                return asyncio.run(self.update_user_async(user_id, email, user_type, is_verified, new_password))
+        else:
+            # Event loop exists, run in thread pool
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                    return future.result()
+            except Exception as e:
+                print(f"❌ Error in async update_user: {e}")
+                return asyncio.run(self.update_user_async(user_id, email, user_type, is_verified, new_password))
+
+    async def toggle_user_status_async(self, user, new_status):
+        """Change user active status (async version)"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                messagebox.showerror("Database Error", "Could not connect to database")
+                return
+                
+            cursor = connection.cursor()
+            
+            cursor.execute("""
+                UPDATE users 
+                SET is_active = %s
+                WHERE user_id = %s
+            """, (new_status, user['user_id']))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ User {user['username']} status changed to {'Active' if new_status else 'Inactive'}")
+            await self.load_users_async()
+            # Schedule UI update on main thread
+            self.parent.after(0, self.update_display)
+            
+        except Error as e:
+            print(f"❌ Error changing user status: {e}")
+            messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+
     def toggle_user_status(self, user, new_status):
-        """Change user active status"""
+        """Change user active status (sync wrapper)"""
         status_text = "deactivate" if not new_status else "activate"
         
         if messagebox.askyesno("Change Status", 
@@ -702,31 +818,33 @@ class AdminUserManager:
                              f"Email: {user['email']}\n"
                              f"Type: {user['user_type']}"):
             
-            try:
-                connection = self.get_db_connection()
-                if not connection:
-                    messagebox.showerror("Database Error", "Could not connect to database")
-                    return
-                    
-                cursor = connection.cursor()
-                
-                cursor.execute("""
-                    UPDATE users 
-                    SET is_active = %s
-                    WHERE user_id = %s
-                """, (new_status, user['user_id']))
-                
-                connection.commit()
-                cursor.close()
-                connection.close()
-                
-                print(f"✅ User {user['username']} status changed to {'Active' if new_status else 'Inactive'}")
-                self.load_users()
-                self.update_display()
-                
-            except Error as e:
-                print(f"❌ Error changing user status: {e}")
-                messagebox.showerror("Database Error", f"Failed to update status: {str(e)}")
+            self.show_loading_indicator(f"{status_text.title()}ing user...")
+            
+            # Use threading to avoid blocking UI
+            def toggle_status_thread():
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.toggle_user_status_async(user, new_status))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async toggle_user_status: {e}")
+                        return asyncio.run(self.toggle_user_status_async(user, new_status))
+                else:
+                    # Event loop exists, run in thread pool
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, self.toggle_user_status_async(user, new_status))
+                            return future.result()
+                    except Exception as e:
+                        print(f"❌ Error in async toggle_user_status: {e}")
+                        return asyncio.run(self.toggle_user_status_async(user, new_status))
+            
+            toggle_status_thread_obj = threading.Thread(target=toggle_status_thread, daemon=True)
+            toggle_status_thread_obj.start()
 
     def show_no_users_message(self):
         """Show message when no users exist"""
@@ -760,12 +878,65 @@ class AdminUserManager:
             self.update_display()
 
     def refresh_users(self):
-        """Refresh the users list"""
+        """Refresh the users list (async version)"""
         print("🔄 Refreshing users...")
+        self.show_loading_indicator("Refreshing users...")
+        
+        # Use threading to avoid blocking UI
+        def refresh_thread():
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop running, create a new one
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_users_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_users: {e}")
+                    result = asyncio.run(self.load_users_async())
+            else:
+                # Event loop exists, run in thread pool
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self.load_users_async())
+                        result = future.result()
+                except Exception as e:
+                    print(f"❌ Error in async refresh_users: {e}")
+                    result = asyncio.run(self.load_users_async())
+            
+            # Schedule UI update on main thread
+            self.parent.after(0, self._update_ui_after_refresh)
+        
+        refresh_thread_obj = threading.Thread(target=refresh_thread, daemon=True)
+        refresh_thread_obj.start()
+    
+    def _update_ui_after_refresh(self):
+        """Update UI after async refresh completes"""
         try:
-            self.load_users()
+            self.hide_loading_indicator()
             self.current_page = 1
             self.update_display()
             print(f"✅ Refresh complete - {len(self.users)} users loaded")
         except Exception as e:
-            print(f"❌ Error during refresh: {e}")
+            print(f"❌ Error during UI update after refresh: {e}")
+    
+    def show_loading_indicator(self, message="Loading..."):
+        """Show loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+        
+        self.loading_label = Label(
+            self.parent,
+            text=message,
+            font=("Inter", 12),
+            bg="#FFFFFF",
+            fg="#792D1B"
+        )
+        self.loading_label.place(x=400, y=200)
+    
+    def hide_loading_indicator(self):
+        """Hide loading indicator"""
+        if self.loading_label:
+            self.loading_label.destroy()
+            self.loading_label = None
