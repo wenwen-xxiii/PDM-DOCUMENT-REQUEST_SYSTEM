@@ -327,7 +327,7 @@ class OTPVerificationWindow:
         
         # Resend email
         email_service = EmailService()
-        if email_service.send_otp_email(self.user_data['email'], self.otp_code):
+        if email_service.send_otp_email_sync(self.user_data['email'], self.otp_code):
             messagebox.showinfo("Success", "New OTP sent to your email!")
             if self.otp_entries:
                 self.otp_entries[0].focus()

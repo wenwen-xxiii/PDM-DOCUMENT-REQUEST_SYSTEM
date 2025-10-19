@@ -139,7 +139,7 @@ class ForgotPasswordWindow:
 
             # Send OTP email
             email_service = EmailService()
-            if email_service.send_otp_email(email, self.otp_code):
+            if email_service.send_otp_email_sync(email, self.otp_code):
                 self.show_otp_verification()
             else:
                 messagebox.showerror("Error", "Failed to send OTP. Please try again.")

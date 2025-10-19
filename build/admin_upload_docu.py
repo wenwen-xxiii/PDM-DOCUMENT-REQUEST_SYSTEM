@@ -376,7 +376,7 @@ class AdminUploadDocumentWindow:
             }]
             
             # Use your existing email service to send with attachments
-            success = email_service.send_email_with_attachments(
+            success = email_service.send_email_with_attachments_sync(
                 student_email, 
                 subject, 
                 body, 
@@ -427,7 +427,7 @@ PDM Registrar's Office
 """
             
             # Use your existing email service for fallback (without attachment)
-            success = email_service._send_email(student_email, subject, enhanced_body)
+            success = email_service._send_email_sync(student_email, subject, enhanced_body)
             
             if success:
                 print(f"✅ Fallback notification sent to {student_email}")

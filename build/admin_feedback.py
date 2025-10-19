@@ -1043,7 +1043,7 @@ class AdminFeedbackManager:
             """
 
             # Send email
-            success = self.email_service._send_email(student_email, subject, body)
+            success = self.email_service._send_email_sync(student_email, subject, body)
 
             if success:
                 print(f"✅ Feedback response email sent to {student_email}")

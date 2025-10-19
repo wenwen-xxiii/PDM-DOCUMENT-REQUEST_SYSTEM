@@ -4,7 +4,8 @@ import random
 import string
 from datetime import datetime
 import re
-import smtplib
+import asyncio
+import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -76,12 +77,12 @@ class EmailService:
         self.email_enabled = bool(self.email_address and self.email_password)
         
         if self.email_enabled:
-            print(f"✓ Email service configured for: {self.email_address}")
+            print(f"[OK] Email service configured for: {self.email_address}")
         else:
-            print("⚠️ Email service disabled - configure EMAIL_ADDRESS and EMAIL_PASSWORD in .env")
+            print("[WARNING] Email service disabled - configure EMAIL_ADDRESS and EMAIL_PASSWORD in .env")
     
-    def send_otp_email(self, to_email, otp_code):
-        """Send OTP email using real SMTP"""
+    async def send_otp_email(self, to_email, otp_code):
+        """Send OTP email using async SMTP"""
         try:
             if not self.email_enabled:
                 return self._fallback_otp_email(to_email, otp_code, "SIMULATION")
@@ -123,22 +124,22 @@ class EmailService:
             </html>
             """
             
-            # Send email
-            success = self._send_email(to_email, subject, body)
+            # Send email asynchronously
+            success = await self._send_email(to_email, subject, body)
             
             if success:
-                print(f"✓ OTP email sent to: {to_email}")
+                print(f"[OK] OTP email sent to: {to_email}")
                 return True
             else:
-                print(f"⚠️ Failed to send OTP email, using fallback")
+                print(f"[WARNING] Failed to send OTP email, using fallback")
                 return self._fallback_otp_email(to_email, otp_code, "FALLBACK")
             
         except Exception as e:
-            print(f"❌ Email error: {e}")
+            print(f"[ERROR] Email error: {e}")
             return self._fallback_otp_email(to_email, otp_code, "FALLBACK")
     
-    def _send_email(self, to_email, subject, body):
-        """Send email using SMTP"""
+    async def _send_email(self, to_email, subject, body):
+        """Send email using async SMTP"""
         try:
             # Create message
             msg = MIMEMultipart()
@@ -149,26 +150,30 @@ class EmailService:
             # Add HTML body
             msg.attach(MIMEText(body, 'html'))
             
-            # Connect to SMTP server
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()  # Enable security
-                server.login(self.email_address, self.email_password)
-                server.send_message(msg)
+            # Use asyncio.to_thread to run synchronous SMTP in thread pool
+            def send_sync():
+                import smtplib
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.email_address, self.email_password)
+                    server.send_message(msg)
+                return True
             
+            await asyncio.to_thread(send_sync)
             return True
             
         except smtplib.SMTPAuthenticationError:
-            print("❌ SMTP Authentication failed. Check email credentials.")
+            print("[ERROR] SMTP Authentication failed. Check email credentials.")
             return False
         except smtplib.SMTPException as e:
-            print(f"❌ SMTP error: {e}")
+            print(f"[ERROR] SMTP error: {e}")
             return False
         except Exception as e:
-            print(f"❌ Email sending error: {e}")
+            print(f"[ERROR] Email sending error: {e}")
             return False
 
-    def send_email_with_attachments(self, to_email, subject, body, attachments_data):
-        """Send email with attachments from database BLOB data"""
+    async def send_email_with_attachments(self, to_email, subject, body, attachments_data):
+        """Send email with attachments from database BLOB data using async SMTP"""
         try:
             if not self.email_enabled:
                 return self._fallback_attachment_email(to_email, subject, body, attachments_data)
@@ -202,27 +207,32 @@ class EmailService:
                     )
                     msg.attach(part)
             
-            # Connect to SMTP server and send
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.email_address, self.email_password)
-                server.send_message(msg)
+            # Use asyncio.to_thread to run synchronous SMTP in thread pool
+            def send_sync():
+                import smtplib
+                with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                    server.starttls()
+                    server.login(self.email_address, self.email_password)
+                    server.send_message(msg)
+                return True
             
-            print(f"✓ Email with attachments sent to: {to_email}")
+            await asyncio.to_thread(send_sync)
+            
+            print(f"[OK] Email with attachments sent to: {to_email}")
             return True
             
         except smtplib.SMTPAuthenticationError:
-            print("❌ SMTP Authentication failed. Check email credentials.")
+            print("[ERROR] SMTP Authentication failed. Check email credentials.")
             return False
         except smtplib.SMTPException as e:
-            print(f"❌ SMTP error: {e}")
+            print(f"[ERROR] SMTP error: {e}")
             return self._fallback_attachment_email(to_email, subject, body, attachments_data)
         except Exception as e:
-            print(f"❌ Email with attachments error: {e}")
+            print(f"[ERROR] Email with attachments error: {e}")
             return self._fallback_attachment_email(to_email, subject, body, attachments_data)
     
-    def send_document_ready_email(self, to_email, request_details, db_connection):
-        """Send email when document is ready with attachments"""
+    async def send_document_ready_email(self, to_email, request_details, db_connection):
+        """Send email when document is ready with attachments using async SMTP"""
         try:
             # Get attachments from database
             cursor = db_connection.cursor()
@@ -281,17 +291,17 @@ class EmailService:
             """
             
             if attachments_data:
-                return self.send_email_with_attachments(to_email, subject, body, attachments_data)
+                return await self.send_email_with_attachments(to_email, subject, body, attachments_data)
             else:
                 # Fallback to regular email if no attachments
-                return self._send_email(to_email, subject, body)
+                return await self._send_email(to_email, subject, body)
                 
         except Exception as e:
-            print(f"❌ Document ready email error: {e}")
+            print(f"[ERROR] Document ready email error: {e}")
             return False
     
-    def send_request_confirmation(self, to_email, request_details):
-        """Send document request confirmation email"""
+    async def send_request_confirmation(self, to_email, request_details):
+        """Send document request confirmation email using async SMTP"""
         try:
             if not self.email_enabled:
                 return self._fallback_confirmation_email(to_email, request_details)
@@ -337,16 +347,16 @@ class EmailService:
             </html>
             """
             
-            return self._send_email(to_email, subject, body)
+            return await self._send_email(to_email, subject, body)
             
         except Exception as e:
-            print(f"❌ Confirmation email error: {e}")
+            print(f"[ERROR] Confirmation email error: {e}")
             return self._fallback_confirmation_email(to_email, request_details)
     
     def _fallback_otp_email(self, to_email, otp_code, mode="SIMULATION"):
         """Fallback method for OTP email"""
         print("=" * 50)
-        print(f"📧 OTP EMAIL ({mode})")
+        print(f"[EMAIL] OTP EMAIL ({mode})")
         print("=" * 50)
         print(f"To: {to_email}")
         print(f"Subject: PDM Document System - OTP Verification")
@@ -362,7 +372,7 @@ class EmailService:
     def _fallback_confirmation_email(self, to_email, request_details):
         """Fallback for confirmation email"""
         print("=" * 50)
-        print("📧 REQUEST CONFIRMATION SIMULATION")
+        print("[EMAIL] REQUEST CONFIRMATION SIMULATION")
         print("=" * 50)
         print(f"To: {to_email}")
         print(f"Document: {request_details.get('document_name', 'N/A')}")
@@ -373,16 +383,89 @@ class EmailService:
     def _fallback_attachment_email(self, to_email, subject, body, attachments_data):
         """Fallback for email with attachments"""
         print("=" * 60)
-        print("📧 EMAIL WITH ATTACHMENTS (FALLBACK)")
+        print("[EMAIL] EMAIL WITH ATTACHMENTS (FALLBACK)")
         print("=" * 60)
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
         print(f"Attachments: {[att['file_name'] for att in attachments_data]}")
         print(f"Body: {body[:100]}...")  # First 100 chars of body
         print("=" * 60)
-        print("✅ Email with attachments would be sent to", to_email)
+        print("[OK] Email with attachments would be sent to", to_email)
         print("=" * 60)
         return True
+
+    # Helper methods to run async functions from sync contexts
+    def send_otp_email_sync(self, to_email, otp_code):
+        """Synchronous wrapper for async send_otp_email"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, create a task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_otp_email(to_email, otp_code))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_otp_email(to_email, otp_code))
+        except RuntimeError:
+            # No event loop running, create a new one
+            return asyncio.run(self.send_otp_email(to_email, otp_code))
+
+    def send_email_with_attachments_sync(self, to_email, subject, body, attachments_data):
+        """Synchronous wrapper for async send_email_with_attachments"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_email_with_attachments(to_email, subject, body, attachments_data))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_email_with_attachments(to_email, subject, body, attachments_data))
+        except RuntimeError:
+            return asyncio.run(self.send_email_with_attachments(to_email, subject, body, attachments_data))
+
+    def send_document_ready_email_sync(self, to_email, request_details, db_connection):
+        """Synchronous wrapper for async send_document_ready_email"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_document_ready_email(to_email, request_details, db_connection))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_document_ready_email(to_email, request_details, db_connection))
+        except RuntimeError:
+            return asyncio.run(self.send_document_ready_email(to_email, request_details, db_connection))
+
+    def send_request_confirmation_sync(self, to_email, request_details):
+        """Synchronous wrapper for async send_request_confirmation"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.send_request_confirmation(to_email, request_details))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self.send_request_confirmation(to_email, request_details))
+        except RuntimeError:
+            return asyncio.run(self.send_request_confirmation(to_email, request_details))
+
+    def _send_email_sync(self, to_email, subject, body):
+        """Synchronous wrapper for async _send_email"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._send_email(to_email, subject, body))
+                    return future.result()
+            else:
+                return loop.run_until_complete(self._send_email(to_email, subject, body))
+        except RuntimeError:
+            return asyncio.run(self._send_email(to_email, subject, body))
 
 
 class PaymentProcessor:

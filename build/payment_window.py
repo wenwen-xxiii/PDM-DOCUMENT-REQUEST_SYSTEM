@@ -350,8 +350,14 @@ class PaymentWindow:
             cursor.close()
             connection.close()
             
-            # Send email notification for cash payment
-            self._send_cash_payment_email(reference_number)
+            # Send email notification for cash payment (async)
+            import threading
+            def send_email_thread():
+                import asyncio
+                asyncio.run(self._send_cash_payment_email(reference_number))
+            
+            email_thread = threading.Thread(target=send_email_thread, daemon=True)
+            email_thread.start()
             
             messagebox.showinfo(
                 "Cash Payment",
@@ -372,8 +378,8 @@ class PaymentWindow:
             # Re-enable button if error occurred
             self.pay_button.config(state="normal")
 
-    def _send_cash_payment_email(self, reference_number):
-        """Send email notification for cash payment with fallback"""
+    async def _send_cash_payment_email(self, reference_number):
+        """Send email notification for cash payment with fallback using async"""
         try:
             # Try to import email service
             try:
@@ -384,7 +390,7 @@ class PaymentWindow:
                 
             student_email = self.student_data.get('email')
             if not student_email:
-                print("❌ No email found for student")
+                print("[ERROR] No email found for student")
                 return False
                 
             student_name = f"{self.student_data.get('first_name', '')} {self.student_data.get('last_name', '')}"
@@ -452,18 +458,18 @@ class PaymentWindow:
             """
             
             if has_email_service:
-                # Send email using email service
-                success = email_service._send_email(student_email, subject, body)
+                # Send email using async email service
+                success = await email_service._send_email(student_email, subject, body)
                 if success:
-                    print(f"✅ Cash payment email sent to {student_email}")
+                    print(f"[OK] Cash payment email sent to {student_email}")
                     return True
                 else:
-                    print(f"❌ Failed to send cash payment email to {student_email}")
+                    print(f"[ERROR] Failed to send cash payment email to {student_email}")
                     # Fall through to fallback method
                     
             # Fallback: Print email details
             print("=" * 60)
-            print("📧 CASH PAYMENT EMAIL (FALLBACK)")
+            print("[EMAIL] CASH PAYMENT EMAIL (FALLBACK)")
             print("=" * 60)
             print(f"To: {student_email}")
             print(f"Subject: {subject}")
@@ -472,7 +478,7 @@ class PaymentWindow:
             return True
             
         except Exception as e:
-            print(f"❌ Error in cash payment email: {e}")
+            print(f"[ERROR] Error in cash payment email: {e}")
             return False
 
     def _relative_to_assets(self, path: str):

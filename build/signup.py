@@ -201,10 +201,8 @@ class SignupWindow:
             cursor_pos = self.entry_studentno.index("insert")
             self.entry_studentno.delete(0, "end")
             self.entry_studentno.insert(0, upper_text)
-            try:
-                self.entry_studentno.icursor(cursor_pos)
-            except:
-                self.entry_studentno.icursor("end")
+            # Keep cursor at the end when converting to uppercase
+            self.entry_studentno.icursor("end")
 
         self.validate_student_number_format()
 
@@ -224,23 +222,43 @@ class SignupWindow:
                 year_part = raw[3:7] if len(raw) > 7 else raw[3:]
                 number_part = raw[7:13] if len(raw) > 7 else ""
 
-                formatted = f"PDM-{year_part}"
-
-                if cleaned.endswith("-") and not number_part:
-                    formatted += "-"
-                elif number_part:
+                # Build formatted string step by step
+                formatted = "PDM"
+                
+                # Add year part with dash
+                if year_part:
+                    formatted += f"-{year_part}"
+                
+                # Add number part with dash if it exists
+                if number_part:
                     formatted += f"-{number_part}"
+                elif cleaned.endswith("-") and not number_part:
+                    # User is typing the dash, keep it
+                    formatted += "-"
 
+                # Only update if the formatted version is different
                 if formatted != cleaned:
+                    # Get current cursor position before deletion
                     current_pos = self.entry_studentno.index('insert')
+                    
+                    # Calculate where cursor should be after formatting
+                    # If user just typed a character, place cursor at the end
+                    if len(formatted) > len(cleaned):
+                        new_cursor_pos = len(formatted)
+                    else:
+                        # Try to maintain relative position
+                        new_cursor_pos = min(current_pos, len(formatted))
+                    
                     self.entry_studentno.delete(0, 'end')
                     self.entry_studentno.insert(0, formatted)
-
+                    
+                    # Set cursor position
                     try:
-                        self.entry_studentno.icursor(min(current_pos, len(formatted)))
+                        self.entry_studentno.icursor(new_cursor_pos)
                     except:
                         self.entry_studentno.icursor('end')
 
+            # Color validation
             if student_number and student_number != self.studentno_placeholder:
                 if self.is_valid_pdm_student_number(student_number):
                     self.entry_studentno.config(fg="#006400")
@@ -322,7 +340,7 @@ class SignupWindow:
 
             # Send OTP email
             email_service = EmailService()
-            if email_service.send_otp_email(email, self.otp_code):
+            if email_service.send_otp_email_sync(email, self.otp_code):
                 self.show_otp_verification()
             else:
                 messagebox.showerror("Error", "Failed to send OTP. Please try again.")

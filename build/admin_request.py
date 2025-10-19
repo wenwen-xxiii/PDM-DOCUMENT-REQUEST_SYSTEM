@@ -515,7 +515,7 @@ class AdminRequestManager:
         try:
             if attachments:
                 # Use the enhanced email service with attachments
-                success = email_service.send_email_with_attachments(
+                success = email_service.send_email_with_attachments_sync(
                     student_email, 
                     subject, 
                     body, 
@@ -523,7 +523,7 @@ class AdminRequestManager:
                 )
             else:
                 # Use regular email service - remove the is_html parameter
-                success = email_service._send_email(
+                success = email_service._send_email_sync(
                     student_email, 
                     subject, 
                     body
