@@ -7,7 +7,9 @@ from otp import OTPVerificationWindow
 import sys
 import os
 import re
+import asyncio
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -34,6 +36,9 @@ class SignupWindow:
         # Placeholder texts
         self.email_placeholder = "example@gmail.com"
         self.studentno_placeholder = "PDM-2025-001234"
+        
+        # Thread pool for async operations
+        self.executor = ThreadPoolExecutor(max_workers=4)
         
         self.button_hidden_img = PhotoImage(file=relative_to_assets("button_hidden.png"))   
         self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
@@ -266,7 +271,11 @@ class SignupWindow:
                     self.entry_studentno.config(fg="#8B0000")
 
     def attempt_signup(self):
-        """Attempt to sign up the user"""
+        """Synchronous wrapper for async signup"""
+        asyncio.create_task(self.attempt_signup_async())
+
+    async def attempt_signup_async(self):
+        """Attempt to sign up the user asynchronously"""
         email = self.entry_email.get().strip()
         password = self.entry_pass.get().strip()
         student_number = self.entry_studentno.get().strip().upper()
@@ -279,7 +288,9 @@ class SignupWindow:
 
         # Validation
         if not all([email, password, student_number]):
-            messagebox.showerror("Error", "Please fill in all fields")
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", "Please fill in all fields")
+            )
             if not email:
                 self.restore_placeholder(self.entry_email, self.email_placeholder)
             if not student_number:
@@ -287,45 +298,38 @@ class SignupWindow:
             return
 
         if not UtilityFunctions.is_valid_email(email):
-            messagebox.showerror("Error", "Please enter a valid email address")
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", "Please enter a valid email address")
+            )
             self.entry_email.focus()
             return
 
         if not self.is_valid_pdm_student_number(student_number):
-            messagebox.showerror(
-                "Error",
-                "Please enter a valid student number in format: PDM-YYYY-NNNNNN\n\nExample: PDM-2025-001234"
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror(
+                    "Error",
+                    "Please enter a valid student number in format: PDM-YYYY-NNNNNN\n\nExample: PDM-2025-001234"
+                )
             )
             self.entry_studentno.focus()
             return
 
         if len(password) < 6:
-            messagebox.showerror("Error", "Password must be at least 6 characters long")
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", "Password must be at least 6 characters long")
+            )
             self.entry_pass.focus()
             return
 
-        db_connection = self.get_db_connection()
-        if not db_connection:
-            messagebox.showerror("Database Error", "Cannot connect to database")
-            return
-
+        # Run database operations in thread pool
         try:
-            cursor = db_connection.cursor(dictionary=True)
-
-            # Check if email already exists in users table
-            cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
-            if cursor.fetchone():
-                messagebox.showerror("Error", "Email already registered")
-                return
-
-            # Check if student number exists and is not already linked
-            cursor.execute("SELECT student_id, user_id FROM students WHERE student_number = %s", (student_number,))
-            student_record = cursor.fetchone()
-
-            if student_record and student_record['user_id']:
-                messagebox.showerror(
-                    "Error",
-                    "This student number is already linked to an existing account. Please login or contact the registrar."
+            result = await self.run_in_thread_pool(
+                lambda: self._check_user_exists(email, student_number)
+            )
+            
+            if not result['success']:
+                await self.run_in_main_thread(
+                    lambda: messagebox.showerror("Error", result['error'])
                 )
                 return
 
@@ -338,18 +342,70 @@ class SignupWindow:
                 'username': student_number
             }
 
-            # Send OTP email
-            email_service = EmailService()
-            if email_service.send_otp_email_sync(email, self.otp_code):
-                self.show_otp_verification()
+            # Send OTP email asynchronously
+            email_sent = await self.run_in_thread_pool(
+                lambda: self._send_otp_email(email, self.otp_code)
+            )
+            
+            if email_sent:
+                await self.run_in_main_thread(self.show_otp_verification)
             else:
-                messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+                await self.run_in_main_thread(
+                    lambda: messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+                )
+
+        except Exception as e:
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", f"Registration failed: {str(e)}")
+            )
+
+    def _check_user_exists(self, email, student_number):
+        """Check if user already exists (runs in thread pool)"""
+        try:
+            db_connection = self.get_db_connection()
+            if not db_connection:
+                return {'success': False, 'error': 'Cannot connect to database'}
+
+            cursor = db_connection.cursor(dictionary=True)
+
+            # Check if email already exists in users table
+            cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+            if cursor.fetchone():
+                return {'success': False, 'error': 'Email already registered'}
+
+            # Check if student number exists and is not already linked
+            cursor.execute("SELECT student_id, user_id FROM students WHERE student_number = %s", (student_number,))
+            student_record = cursor.fetchone()
+
+            if student_record and student_record['user_id']:
+                return {
+                    'success': False, 
+                    'error': 'This student number is already linked to an existing account. Please login or contact the registrar.'
+                }
+
+            cursor.close()
+            return {'success': True}
 
         except mysql.connector.Error as e:
-            messagebox.showerror("Database Error", f"Registration failed: {str(e)}")
-        finally:
-            if db_connection and db_connection.is_connected():
-                cursor.close()
+            return {'success': False, 'error': f'Database error: {str(e)}'}
+
+    def _send_otp_email(self, email, otp_code):
+        """Send OTP email (runs in thread pool)"""
+        try:
+            email_service = EmailService()
+            return email_service.send_otp_email_sync(email, otp_code)
+        except Exception as e:
+            return False
+
+    async def run_in_main_thread(self, func):
+        """Run function in main thread"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func)
+
+    async def run_in_thread_pool(self, func):
+        """Run function in thread pool"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, func)
 
     def show_otp_verification(self):
         """Show OTP verification window"""
@@ -364,11 +420,44 @@ class SignupWindow:
         )
 
     def complete_registration(self):
-        """Complete the registration process with proper transaction handling"""
-        db_connection = self.get_db_connection()
-        if not db_connection or not self.user_data:
-            messagebox.showerror("Error", "Registration failed")
+        """Synchronous wrapper for async registration completion"""
+        asyncio.create_task(self.complete_registration_async())
+
+    async def complete_registration_async(self):
+        """Complete the registration process asynchronously with proper transaction handling"""
+        if not self.user_data:
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", "Registration failed")
+            )
             return
+
+        try:
+            # Run database operations in thread pool
+            result = await self.run_in_thread_pool(
+                lambda: self._complete_registration_db()
+            )
+            
+            if result['success']:
+                success_message = result['message']
+                await self.run_in_main_thread(
+                    lambda: messagebox.showinfo("Success", success_message.strip())
+                )
+                await self.run_in_main_thread(self.show_login_callback)
+            else:
+                await self.run_in_main_thread(
+                    lambda: messagebox.showerror("Registration Error", result['error'])
+                )
+
+        except Exception as e:
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")
+            )
+
+    def _complete_registration_db(self):
+        """Complete registration in database (runs in thread pool)"""
+        db_connection = self.get_db_connection()
+        if not db_connection:
+            return {'success': False, 'error': 'Cannot connect to database'}
 
         cursor = None
         try:
@@ -477,7 +566,7 @@ class SignupWindow:
             
             db_connection.commit()
             
-            # Show success message
+            # Prepare success message
             success_message = f"""
             Registration completed successfully!
 
@@ -491,8 +580,7 @@ class SignupWindow:
             You can now login using your student number or email.
             """
             
-            messagebox.showinfo("Success", success_message.strip())
-            self.show_login_callback()
+            return {'success': True, 'message': success_message}
             
         except mysql.connector.Error as e:
             try:
@@ -509,14 +597,7 @@ class SignupWindow:
                 elif "username" in str(e):
                     error_message = "Username already taken. Please choose a different username."
             
-            messagebox.showerror("Registration Error", error_message)
-            
-        except Exception as e:
-            try:
-                db_connection.rollback()
-            except:
-                pass
-            messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")
+            return {'success': False, 'error': error_message}
             
         finally:
             if cursor:
@@ -524,5 +605,9 @@ class SignupWindow:
             
     def destroy(self):
         """Clean up the window"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
         for widget in self.parent.winfo_children():
             widget.destroy()

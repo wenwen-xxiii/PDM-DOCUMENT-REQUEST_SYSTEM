@@ -1,13 +1,38 @@
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 import json
+import asyncio
+import aiohttp
+import logging
+from datetime import datetime
 from payment_processor import PayMongoProcessor
 
-app = Flask(__name__)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Quart(__name__)
 payment_processor = PayMongoProcessor()
 
+# Global session for HTTP requests
+http_session = None
+
+async def get_http_session():
+    """Get or create HTTP session"""
+    global http_session
+    if http_session is None:
+        http_session = aiohttp.ClientSession()
+    return http_session
+
+async def cleanup_session():
+    """Cleanup HTTP session"""
+    global http_session
+    if http_session:
+        await http_session.close()
+        http_session = None
+
 @app.route('/webhook/paymongo', methods=['GET', 'POST'])
-def handle_paymongo_webhook():
-    """Handle PayMongo webhook events (both GET and POST)"""
+async def handle_paymongo_webhook():
+    """Handle PayMongo webhook events (both GET and POST) asynchronously"""
     try:
         if request.method == 'GET':
             # PayMongo is testing the webhook URL or it's a browser request
@@ -21,15 +46,15 @@ def handle_paymongo_webhook():
         
         elif request.method == 'POST':
             # Actual webhook event from PayMongo
-            raw_payload = request.get_data(as_text=True)
-            payload = request.json
+            raw_payload = await request.get_data(as_text=True)
+            payload = await request.get_json()
             headers = dict(request.headers)
             
             print(f"🔔 Webhook received from PayMongo")
             print(f"📧 Event Type: {payload['data']['attributes']['type'] if payload else 'Unknown'}")
             
-            # Process the webhook
-            result = payment_processor.handle_webhook_event(payload, headers)
+            # Process the webhook asynchronously
+            result = await process_webhook_async(payload, headers)
             
             if result['success']:
                 print(f"✅ Webhook processed successfully")
@@ -42,8 +67,46 @@ def handle_paymongo_webhook():
         print(f"❌ Webhook processing error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+async def process_webhook_async(payload, headers):
+    """Process webhook event asynchronously"""
+    try:
+        # Log webhook event
+        logger.info(f"Processing webhook event: {payload.get('data', {}).get('attributes', {}).get('type', 'Unknown')}")
+        
+        # Run payment processor in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, 
+            payment_processor.handle_webhook_event, 
+            payload, 
+            headers
+        )
+        
+        # Log result
+        if result['success']:
+            logger.info("Webhook processed successfully")
+        else:
+            logger.error(f"Webhook processing failed: {result.get('error')}")
+            
+        return result
+    except Exception as e:
+        logger.error(f"Error processing webhook: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+@app.before_serving
+async def startup():
+    """Startup tasks"""
+    logger.info("Starting async webhook server...")
+    await get_http_session()
+
+@app.after_serving
+async def shutdown():
+    """Shutdown tasks"""
+    logger.info("Shutting down async webhook server...")
+    await cleanup_session()
+
 @app.route('/success')
-def success_page():
+async def success_page():
     """Success page after payment"""
     return """
     <html>
@@ -70,7 +133,7 @@ def success_page():
     """
 
 @app.route('/cancel')
-def cancel_page():
+async def cancel_page():
     """Cancel page when payment is cancelled"""
     return """
     <html>
@@ -97,22 +160,51 @@ def cancel_page():
     """
 
 @app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'PDM Document System Webhook Server',
-        'webhook_url': 'https://araneiform-daisey-transthalamic.ngrok-free.dev/webhook/paymongo',
-        'endpoints': {
-            'webhook': '/webhook/paymongo (GET/POST)',
-            'health': '/health (GET)',
-            'success': '/success (GET)',
-            'cancel': '/cancel (GET)'
+async def health_check():
+    """Health check endpoint with async capabilities"""
+    try:
+        # Test database connection (if needed)
+        health_status = {
+            'status': 'healthy',
+            'service': 'PDM Document System Async Webhook Server',
+            'timestamp': datetime.now().isoformat(),
+            'webhook_url': 'https://araneiform-daisey-transthalamic.ngrok-free.dev/webhook/paymongo',
+            'endpoints': {
+                'webhook': '/webhook/paymongo (GET/POST)',
+                'health': '/health (GET)',
+                'success': '/success (GET)',
+                'cancel': '/cancel (GET)'
+            },
+            'async_features': {
+                'webhook_processing': 'async',
+                'http_session': 'active' if http_session else 'inactive',
+                'thread_pool': 'available'
+            }
         }
-    }), 200
+        
+        # Test external connectivity (optional)
+        try:
+            session = await get_http_session()
+            async with session.get('https://httpbin.org/get', timeout=5) as response:
+                if response.status == 200:
+                    health_status['external_connectivity'] = 'ok'
+                else:
+                    health_status['external_connectivity'] = 'limited'
+        except Exception as e:
+            health_status['external_connectivity'] = f'error: {str(e)}'
+        
+        return jsonify(health_status), 200
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 @app.route('/')
-def home():
+async def home():
     """Home page"""
     return """
     <html>
@@ -133,10 +225,10 @@ def home():
                 <h2>Webhook Server</h2>
                 
                 <div class="status">
-                    <strong>✅ Server is running</strong>
+                    <strong>✅ Async Server is running</strong>
                 </div>
                 
-                <p>This server handles payment webhooks from PayMongo for the PDM Document Request System.</p>
+                <p>This async server handles payment webhooks from PayMongo for the PDM Document Request System with improved performance and non-blocking operations.</p>
                 
                 <h3>Available Endpoints:</h3>
                 
@@ -170,12 +262,20 @@ def home():
     </html>
     """
 
-if __name__ == '__main__':
-    print("🚀 Starting PDM Document System Webhook Server...")
+async def startup_tasks():
+    """Async startup tasks"""
+    print("🚀 Starting PDM Document System Async Webhook Server...")
     print("🔗 Webhook URL: https://araneiform-daisey-transthalamic.ngrok-free.dev/webhook/paymongo")
     print("🏠 Home Page: https://araneiform-daisey-transthalamic.ngrok-free.dev/")
     print("✅ Success Page: https://araneiform-daisey-transthalamic.ngrok-free.dev/success")
     print("❌ Cancel Page: https://araneiform-daisey-transthalamic.ngrok-free.dev/cancel")
     print("❤️  Health Check: https://araneiform-daisey-transthalamic.ngrok-free.dev/health")
     print("\n📋 Make sure to configure PayMongo webhook with the URL above")
+    print("⚡ Server is running in async mode for better performance")
+
+if __name__ == '__main__':
+    # Run startup tasks
+    asyncio.run(startup_tasks())
+    
+    # Start the async server
     app.run(host='0.0.0.0', port=5000, debug=True)

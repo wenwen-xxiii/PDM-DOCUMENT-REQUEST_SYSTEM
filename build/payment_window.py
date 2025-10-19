@@ -4,6 +4,8 @@ import webbrowser
 from pathlib import Path
 import mysql.connector
 from datetime import datetime
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from config import DB_CONFIG
 from payment_processor import PayMongoProcessor
@@ -15,6 +17,9 @@ class PaymentWindow:
         self.student_data = student_data
         self.refresh_callback = refresh_callback
         self.payment_processor = PayMongoProcessor()
+        
+        # Thread pool for async operations
+        self.executor = ThreadPoolExecutor(max_workers=4)
         
         self.create_window()
         
@@ -243,21 +248,25 @@ class PaymentWindow:
         self.status_label.place(x=54, y=button_y + 70, width=400, height=20)
         
     def process_payment(self):
-        """Process payment based on selected method"""
+        """Synchronous wrapper for async payment processing"""
+        asyncio.create_task(self.process_payment_async())
+
+    async def process_payment_async(self):
+        """Process payment based on selected method asynchronously"""
         payment_method = self.payment_method.get()
         
         if payment_method == "cash":
-            self._process_cash_payment()
+            await self._process_cash_payment_async()
         else:
-            self._process_online_payment()
+            await self._process_online_payment_async()
     
-    def _process_online_payment(self):
-        """Process online payment with webhook support"""
+    async def _process_online_payment_async(self):
+        """Process online payment with webhook support asynchronously"""
         try:
             # Disable payment button immediately to prevent multiple clicks
-            self.pay_button.config(state="disabled")
-            self.status_label.config(text="Creating payment link...")
-            self.window.update()
+            await self.run_in_main_thread(lambda: self.pay_button.config(state="disabled"))
+            await self.run_in_main_thread(lambda: self.status_label.config(text="Creating payment link..."))
+            await self.run_in_main_thread(lambda: self.window.update())
             
             description = f"Document: {self.request_data['document_name']} - Request: {self.request_data['request_number']}"
             student_name = f"{self.student_data.get('first_name', '')} {self.student_data.get('last_name', '')}"
@@ -273,58 +282,115 @@ class PaymentWindow:
             # Use request_id from request_data (should be the primary key)
             request_id = self.request_data['request_id']
             
-            result = self.payment_processor.create_checkout_session(
-                request_id=request_id,
-                amount=self.request_data['total_amount'],
-                description=description,
-                metadata=metadata,
-                success_url="https://araneiform-daisey-transthalamic.ngrok-free.dev/success",
-                cancel_url="https://araneiform-daisey-transthalamic.ngrok-free.dev/cancel"
+            # Run payment processor in thread pool
+            result = await self.run_in_thread_pool(
+                lambda: self.payment_processor.create_checkout_session(
+                    request_id=request_id,
+                    amount=self.request_data['total_amount'],
+                    description=description,
+                    metadata=metadata,
+                    success_url="https://araneiform-daisey-transthalamic.ngrok-free.dev/success",
+                    cancel_url="https://araneiform-daisey-transthalamic.ngrok-free.dev/cancel"
+                )
             )
             
             if result['success']:
                 self.checkout_id = result['checkout_id']
                 checkout_url = result['checkout_url']
-                self.status_label.config(text="Opening payment page...")
+                await self.run_in_main_thread(lambda: self.status_label.config(text="Opening payment page..."))
                 
-                webbrowser.open(checkout_url)
+                # Open browser in main thread
+                await self.run_in_main_thread(lambda: webbrowser.open(checkout_url))
                 
-                messagebox.showinfo(
+                await self.run_in_main_thread(lambda: messagebox.showinfo(
                     "Payment Processing",
                     f"✅ Payment page opened in your browser!\n\n"
                     f"🔗 Please complete the payment in the opened window.\n"
                     f"📧 Payment status will update automatically via webhook.\n"
                     f"🔄 The system will refresh when payment is confirmed.\n\n"
                     f"Checkout ID: {self.checkout_id}"
-                )
+                ))
                 
                 # Close payment window
-                self.window.destroy()
+                await self.run_in_main_thread(lambda: self.window.destroy())
                 
                 # Refresh the main window to show "Payment Verified" status
                 if self.refresh_callback:
-                    self.refresh_callback()
+                    await self.run_in_main_thread(self.refresh_callback)
                     
             else:
-                messagebox.showerror("Payment Error", f"Failed to create payment: {result['error']}")
-                self.status_label.config(text="Payment failed")
+                await self.run_in_main_thread(
+                    lambda: messagebox.showerror("Payment Error", f"Failed to create payment: {result['error']}")
+                )
+                await self.run_in_main_thread(lambda: self.status_label.config(text="Payment failed"))
                 # Re-enable button if payment creation failed
-                self.pay_button.config(state="normal")
+                await self.run_in_main_thread(lambda: self.pay_button.config(state="normal"))
                     
         except Exception as e:
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
-            self.status_label.config(text="Error occurred")
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", f"An error occurred: {str(e)}")
+            )
+            await self.run_in_main_thread(lambda: self.status_label.config(text="Error occurred"))
             # Re-enable button if error occurred
-            self.pay_button.config(state="normal")
+            await self.run_in_main_thread(lambda: self.pay_button.config(state="normal"))
         
-    def _process_cash_payment(self):
-        """Process cash payment with email notification"""
+        finally:
+            # Cleanup resources
+            self.cleanup()
+        
+    async def _process_cash_payment_async(self):
+        """Process cash payment with email notification asynchronously"""
         try:
             # Disable payment button immediately
-            self.pay_button.config(state="disabled")
-            self.status_label.config(text="Processing cash payment...")
-            self.window.update()
+            await self.run_in_main_thread(lambda: self.pay_button.config(state="disabled"))
+            await self.run_in_main_thread(lambda: self.status_label.config(text="Processing cash payment..."))
+            await self.run_in_main_thread(lambda: self.window.update())
             
+            # Run database operations in thread pool
+            result = await self.run_in_thread_pool(
+                lambda: self._record_cash_payment()
+            )
+            
+            if result['success']:
+                reference_number = result['reference_number']
+                
+                # Send email notification for cash payment asynchronously
+                await self._send_cash_payment_email(reference_number)
+                
+                await self.run_in_main_thread(lambda: messagebox.showinfo(
+                    "Cash Payment",
+                    f"✅ Cash payment recorded successfully!\n\n"
+                    f"🏦 Please proceed to the cashier's office to complete your payment.\n"
+                    f"📋 Reference Number: {reference_number}\n"
+                    f"💰 Amount: ₱{self.request_data['total_amount']:.2f}\n\n"
+                    f"📧 A confirmation email has been sent with payment details."
+                ))
+                
+                await self.run_in_main_thread(lambda: self.window.destroy())
+                
+                if self.refresh_callback:
+                    await self.run_in_main_thread(self.refresh_callback)
+            else:
+                await self.run_in_main_thread(
+                    lambda: messagebox.showerror("Error", f"Failed to record cash payment: {result['error']}")
+                )
+                # Re-enable button if error occurred
+                await self.run_in_main_thread(lambda: self.pay_button.config(state="normal"))
+                
+        except Exception as e:
+            await self.run_in_main_thread(
+                lambda: messagebox.showerror("Error", f"Failed to record cash payment: {str(e)}")
+            )
+            # Re-enable button if error occurred
+            await self.run_in_main_thread(lambda: self.pay_button.config(state="normal"))
+        
+        finally:
+            # Cleanup resources
+            self.cleanup()
+
+    def _record_cash_payment(self):
+        """Record cash payment in database (runs in thread pool)"""
+        try:
             connection = mysql.connector.connect(**DB_CONFIG)
             cursor = connection.cursor()
             
@@ -350,33 +416,10 @@ class PaymentWindow:
             cursor.close()
             connection.close()
             
-            # Send email notification for cash payment (async)
-            import threading
-            def send_email_thread():
-                import asyncio
-                asyncio.run(self._send_cash_payment_email(reference_number))
+            return {'success': True, 'reference_number': reference_number}
             
-            email_thread = threading.Thread(target=send_email_thread, daemon=True)
-            email_thread.start()
-            
-            messagebox.showinfo(
-                "Cash Payment",
-                f"✅ Cash payment recorded successfully!\n\n"
-                f"🏦 Please proceed to the cashier's office to complete your payment.\n"
-                f"📋 Reference Number: {reference_number}\n"
-                f"💰 Amount: ₱{self.request_data['total_amount']:.2f}\n\n"
-                f"📧 A confirmation email has been sent with payment details."
-            )
-            
-            self.window.destroy()
-            
-            if self.refresh_callback:
-                self.refresh_callback()
-                
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to record cash payment: {str(e)}")
-            # Re-enable button if error occurred
-            self.pay_button.config(state="normal")
+            return {'success': False, 'error': str(e)}
 
     async def _send_cash_payment_email(self, reference_number):
         """Send email notification for cash payment with fallback using async"""
@@ -480,6 +523,22 @@ class PaymentWindow:
         except Exception as e:
             print(f"[ERROR] Error in cash payment email: {e}")
             return False
+
+    async def run_in_main_thread(self, func):
+        """Run function in main thread"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func)
+
+    async def run_in_thread_pool(self, func):
+        """Run function in thread pool"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, func)
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
 
     def _relative_to_assets(self, path: str):
         """Get path to assets"""

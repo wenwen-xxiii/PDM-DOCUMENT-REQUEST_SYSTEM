@@ -1,15 +1,23 @@
-import requests
+import aiohttp
+import asyncio
 import json
 import base64
 import mysql.connector
 from datetime import datetime
 from config import DB_CONFIG, PAYMONGO_CONFIG
+from concurrent.futures import ThreadPoolExecutor
 
 class PayMongoProcessor:
     def __init__(self):
         self.secret_key = PAYMONGO_CONFIG['secret_key']
         self.base_url = "https://api.paymongo.com/v1"
         self.webhook_url = "https://araneiform-daisey-transthalamic.ngrok-free.dev/webhook/paymongo"
+        
+        # Thread pool for database operations
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        
+        # HTTP session for async requests
+        self.http_session = None
         
     def get_db_connection(self):
         """Establish database connection"""
@@ -21,8 +29,29 @@ class PayMongoProcessor:
         encoded_auth = base64.b64encode(auth_string.encode()).decode()
         return f"Basic {encoded_auth}"
 
+    async def get_http_session(self):
+        """Get or create HTTP session"""
+        if self.http_session is None:
+            self.http_session = aiohttp.ClientSession()
+        return self.http_session
+
+    async def cleanup_http_session(self):
+        """Cleanup HTTP session"""
+        if self.http_session:
+            await self.http_session.close()
+            self.http_session = None
+
+    async def run_in_thread_pool(self, func):
+        """Run function in thread pool"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, func)
+
     def handle_webhook_event(self, payload, headers):
-        """Handle incoming webhook events from PayMongo"""
+        """Synchronous wrapper for async webhook handling"""
+        return asyncio.run(self.handle_webhook_event_async(payload, headers))
+
+    async def handle_webhook_event_async(self, payload, headers):
+        """Handle incoming webhook events from PayMongo asynchronously"""
         try:
             print(f"🔔 Webhook received from PayMongo")
             
@@ -37,7 +66,7 @@ class PayMongoProcessor:
                 print(f"📧 Event data structure: {list(payload['data']['attributes'].keys())}")
             
             # Verify webhook signature (important for security)
-            if not self.verify_webhook_signature(payload, headers):
+            if not await self.run_in_thread_pool(lambda: self.verify_webhook_signature(payload, headers)):
                 print("❌ Webhook signature verification failed")
                 return {'success': False, 'error': 'Invalid signature'}
             
@@ -48,14 +77,14 @@ class PayMongoProcessor:
             print(f"📦 Event Data: {json.dumps(event_data, indent=2)}")
             
             if event_type == 'checkout_session.payment.paid':
-                return self._handle_checkout_session_paid(event_data)
+                return await self._handle_checkout_session_paid_async(event_data)
             elif event_type == 'payment.paid':
                 print("💰 Direct payment.paid event received")
-                return self._handle_direct_payment_paid(event_data)
+                return await self._handle_direct_payment_paid_async(event_data)
             elif event_type == 'checkout_session.payment.failed':
-                return self._handle_payment_failed(event_data)
+                return await self._handle_payment_failed_async(event_data)
             elif event_type == 'checkout_session.payment.cancelled':
-                return self._handle_payment_cancelled(event_data)
+                return await self._handle_payment_cancelled_async(event_data)
             else:
                 print(f"ℹ️  Unhandled webhook event: {event_type}")
                 return {'success': True, 'message': 'Event not handled'}
@@ -65,8 +94,8 @@ class PayMongoProcessor:
             print(f"📦 Full payload that caused error: {json.dumps(payload, indent=2)}")
             return {'success': False, 'error': str(e)}
 
-    def _handle_checkout_session_paid(self, event_data):
-        """Handle checkout_session.payment.paid event"""
+    async def _handle_checkout_session_paid_async(self, event_data):
+        """Handle checkout_session.payment.paid event asynchronously"""
         try:
             # Extract checkout session ID from the correct location in event data
             if 'id' in event_data:
@@ -82,7 +111,9 @@ class PayMongoProcessor:
             print(f"🎉 Checkout session payment successful: {checkout_session_id}")
             
             # Update database status using checkout_session_id
-            success = self._update_to_paid_status(checkout_session_id)
+            success = await self.run_in_thread_pool(
+                lambda: self._update_to_paid_status(checkout_session_id)
+            )
             
             if success:
                 return {'success': True, 'message': 'Payment processed successfully'}
@@ -94,8 +125,8 @@ class PayMongoProcessor:
             print(f"📦 Event data received: {event_data}")
             return {'success': False, 'error': str(e)}
 
-    def _handle_direct_payment_paid(self, event_data):
-        """Handle payment.paid event - find the checkout session from payment"""
+    async def _handle_direct_payment_paid_async(self, event_data):
+        """Handle payment.paid event - find the checkout session from payment asynchronously"""
         try:
             payment_id = event_data['id']
             print(f"💰 Direct payment successful: {payment_id}")
@@ -111,30 +142,40 @@ class PayMongoProcessor:
             
             # Method 1: Try to find checkout session from document_requests
             if request_id or request_number:
-                checkout_session_id = self._find_checkout_session_by_request(request_id, request_number)
+                checkout_session_id = await self.run_in_thread_pool(
+                    lambda: self._find_checkout_session_by_request(request_id, request_number)
+                )
             
             # Method 2: Try API call to get payment intent
             if not checkout_session_id:
-                payment_details = self._get_payment_details(payment_id)
+                payment_details = await self._get_payment_details_async(payment_id)
                 if payment_details['success']:
                     # Get payment intent ID and find associated checkout session
                     payment_intent_id = payment_details.get('payment_intent_id')
                     if payment_intent_id:
-                        checkout_session_id = self._find_checkout_session_by_payment_intent(payment_intent_id)
+                        checkout_session_id = await self.run_in_thread_pool(
+                            lambda: self._find_checkout_session_by_payment_intent(payment_intent_id)
+                        )
             
             # Method 3: Search for most recent pending checkout session
             if not checkout_session_id:
                 print("🔍 Searching for most recent pending checkout session...")
-                checkout_session_id = self._find_most_recent_pending_checkout_session()
+                checkout_session_id = await self.run_in_thread_pool(
+                    lambda: self._find_most_recent_pending_checkout_session()
+                )
             
             if not checkout_session_id:
                 print(f"❌ No checkout session found for payment {payment_id}")
                 print("💡 Attempting to update using request metadata directly...")
                 # Fallback: Try to update using request metadata directly
-                return self._update_using_request_metadata(metadata, payment_id)
+                return await self.run_in_thread_pool(
+                    lambda: self._update_using_request_metadata(metadata, payment_id)
+                )
             
             print(f"✅ Found checkout session: {checkout_session_id}")
-            success = self._update_to_paid_status(checkout_session_id)
+            success = await self.run_in_thread_pool(
+                lambda: self._update_to_paid_status(checkout_session_id)
+            )
             
             if success:
                 return {'success': True, 'message': 'Payment processed successfully'}
@@ -178,6 +219,25 @@ class PayMongoProcessor:
             cursor.close()
             connection.close()
 
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
+
     def _find_checkout_session_by_payment_intent(self, payment_intent_id):
         """Find checkout session by payment intent ID"""
         connection = self.get_db_connection()
@@ -203,6 +263,25 @@ class PayMongoProcessor:
         finally:
             cursor.close()
             connection.close()
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
 
     def _find_most_recent_pending_checkout_session(self):
         """Find the most recent pending checkout session"""
@@ -234,6 +313,25 @@ class PayMongoProcessor:
         finally:
             cursor.close()
             connection.close()
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
 
     def _update_using_request_metadata(self, metadata, payment_id):
         """Fallback: Update database using request metadata directly"""
@@ -329,8 +427,27 @@ class PayMongoProcessor:
             cursor.close()
             connection.close()
 
-    def _get_payment_details(self, payment_id):
-        """Get payment details from PayMongo"""
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
+
+    async def _get_payment_details_async(self, payment_id):
+        """Get payment details from PayMongo asynchronously"""
         url = f"{self.base_url}/payments/{payment_id}"
         
         headers = {
@@ -340,38 +457,41 @@ class PayMongoProcessor:
         
         try:
             print(f"🔧 Fetching payment details from: {url}")
-            response = requests.get(url, headers=headers, timeout=30)
+            session = await self.get_http_session()
             
-            if response.status_code == 404:
-                return {'success': False, 'error': 'Payment not found'}
+            async with session.get(url, headers=headers, timeout=30) as response:
+                if response.status == 404:
+                    return {'success': False, 'error': 'Payment not found'}
+                    
+                response.raise_for_status()
                 
-            response.raise_for_status()
-            
-            result = response.json()
-            payment_data = result['data']
-            
-            # Extract payment intent ID
-            payment_intent_id = payment_data.get('attributes', {}).get('payment_intent_id')
-            
-            print(f"📦 Payment data - Intent: {payment_intent_id}")
-            
-            return {
-                'success': True,
-                'payment_intent_id': payment_intent_id,
-                'response_data': result
-            }
+                result = await response.json()
+                payment_data = result['data']
+                
+                # Extract payment intent ID
+                payment_intent_id = payment_data.get('attributes', {}).get('payment_intent_id')
+                
+                print(f"📦 Payment data - Intent: {payment_intent_id}")
+                
+                return {
+                    'success': True,
+                    'payment_intent_id': payment_intent_id,
+                    'response_data': result
+                }
             
         except Exception as e:
             print(f"❌ Error fetching payment details: {e}")
             return {'success': False, 'error': str(e)}
     
-    def _handle_payment_failed(self, event_data):
-        """Handle failed payment webhook"""
+    async def _handle_payment_failed_async(self, event_data):
+        """Handle failed payment webhook asynchronously"""
         try:
             checkout_session_id = event_data['id']
             print(f"❌ Payment failed for checkout session: {checkout_session_id}")
             
-            success = self._update_to_failed_status(checkout_session_id)
+            success = await self.run_in_thread_pool(
+                lambda: self._update_to_failed_status(checkout_session_id)
+            )
             
             if success:
                 return {'success': True, 'message': 'Payment failure recorded'}
@@ -382,13 +502,15 @@ class PayMongoProcessor:
             print(f"❌ Error handling payment failed: {e}")
             return {'success': False, 'error': str(e)}
 
-    def _handle_payment_cancelled(self, event_data):
-        """Handle cancelled payment webhook"""
+    async def _handle_payment_cancelled_async(self, event_data):
+        """Handle cancelled payment webhook asynchronously"""
         try:
             checkout_session_id = event_data['id']
             print(f"⚠️  Payment cancelled for checkout session: {checkout_session_id}")
             
-            success = self._update_to_failed_status(checkout_session_id)
+            success = await self.run_in_thread_pool(
+                lambda: self._update_to_failed_status(checkout_session_id)
+            )
             
             if success:
                 return {'success': True, 'message': 'Payment cancellation recorded'}
@@ -566,6 +688,25 @@ class PayMongoProcessor:
         finally:
             cursor.close()
             connection.close()
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
     
     def _update_to_failed_status(self, checkout_session_id):
         """Update database when payment fails - FIXED"""
@@ -599,8 +740,31 @@ class PayMongoProcessor:
             cursor.close()
             connection.close()
 
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
+
     def create_checkout_session(self, request_id, amount, description, metadata=None, success_url=None, cancel_url=None):
-        """Create a checkout session with PayMongo"""
+        """Synchronous wrapper for async checkout session creation"""
+        return asyncio.run(self.create_checkout_session_async(request_id, amount, description, metadata, success_url, cancel_url))
+
+    async def create_checkout_session_async(self, request_id, amount, description, metadata=None, success_url=None, cancel_url=None):
+        """Create a checkout session with PayMongo asynchronously"""
         url = f"{self.base_url}/checkout_sessions"
         
         if amount <= 0:
@@ -661,27 +825,30 @@ class PayMongoProcessor:
             print(f"🔧 Creating checkout session for request: {request_id}")
             print(f"🔗 Webhook URL: {self.webhook_url}")
             
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
-            
-            result = response.json()
-            checkout_session = result['data']
-            checkout_id = checkout_session['id']
-            checkout_url = checkout_session['attributes']['checkout_url']
-            
-            print(f"✅ Checkout Session Created: {checkout_id}")
-            print(f"🔗 Checkout URL: {checkout_url}")
-            
-            # Create payment record
-            payment_id = self.create_payment_record(request_id, checkout_id, amount, "online")
-            
-            return {
-                'success': True,
-                'checkout_id': checkout_id,
-                'checkout_url': checkout_url,
-                'payment_intent_id': checkout_id,
-                'response_data': result
-            }
+            session = await self.get_http_session()
+            async with session.post(url, json=payload, headers=headers, timeout=30) as response:
+                response.raise_for_status()
+                
+                result = await response.json()
+                checkout_session = result['data']
+                checkout_id = checkout_session['id']
+                checkout_url = checkout_session['attributes']['checkout_url']
+                
+                print(f"✅ Checkout Session Created: {checkout_id}")
+                print(f"🔗 Checkout URL: {checkout_url}")
+                
+                # Create payment record
+                payment_id = await self.run_in_thread_pool(
+                    lambda: self.create_payment_record(request_id, checkout_id, amount, "online")
+                )
+                
+                return {
+                    'success': True,
+                    'checkout_id': checkout_id,
+                    'checkout_url': checkout_url,
+                    'payment_intent_id': checkout_id,
+                    'response_data': result
+                }
             
         except Exception as e:
             error_msg = f"Failed to create checkout session: {str(e)}"
@@ -739,6 +906,25 @@ class PayMongoProcessor:
             cursor.close()
             connection.close()
 
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
+
     def _find_checkout_session_by_payment_metadata(self, payment_id):
         """Try to find checkout session by searching payment metadata in database"""
         connection = self.get_db_connection()
@@ -773,6 +959,25 @@ class PayMongoProcessor:
         finally:
             cursor.close()
             connection.close()
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
     
     def sync_payment_intent_ids(self):
         """Sync payment_intent_id between payments and document_requests tables"""
@@ -823,3 +1028,22 @@ class PayMongoProcessor:
         finally:
             cursor.close()
             connection.close()
+
+    def cleanup(self):
+        """Cleanup resources"""
+        # Shutdown thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        
+        # Close HTTP session if running in async context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule cleanup for later
+                asyncio.create_task(self.cleanup_http_session())
+            else:
+                # Run cleanup immediately
+                asyncio.run(self.cleanup_http_session())
+        except RuntimeError:
+            # No event loop running, skip HTTP session cleanup
+            pass
