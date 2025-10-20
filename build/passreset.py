@@ -143,6 +143,48 @@ class PasswordResetWindow:
             relief="flat"
         )
         self.button_back.place(x=624.0, y=16.0, width=30.0, height=30.0)
+        
+        # Set initial focus and configure tab order
+        self.entry_newpass.focus()
+        
+        # Configure tab order for proper keyboard navigation
+        # Tab order: New Password -> Confirm Password -> Reset Button -> Back Button
+        self.parent.bind('<Tab>', self.on_tab_key)
+        self.parent.bind('<Shift-Tab>', self.on_shift_tab_key)
+        
+        # Add keyboard shortcuts
+        self.parent.bind('<Control-r>', lambda e: self.reset_password())  # Ctrl+R to reset
+        self.parent.bind('<Escape>', lambda e: self.go_back())  # Escape to go back
+
+    def on_tab_key(self, event):
+        """Handle Tab key navigation"""
+        focused_widget = self.parent.focus_get()
+        
+        if focused_widget == self.entry_newpass:
+            self.entry_confirmpass.focus()
+        elif focused_widget == self.entry_confirmpass:
+            self.button_resetpass.focus()
+        elif focused_widget == self.button_resetpass:
+            self.button_back.focus()
+        elif focused_widget == self.button_back:
+            self.entry_newpass.focus()  # Cycle back to start
+        
+        return "break"  # Prevent default tab behavior
+    
+    def on_shift_tab_key(self, event):
+        """Handle Shift+Tab key navigation (reverse order)"""
+        focused_widget = self.parent.focus_get()
+        
+        if focused_widget == self.entry_newpass:
+            self.button_back.focus()
+        elif focused_widget == self.entry_confirmpass:
+            self.entry_newpass.focus()
+        elif focused_widget == self.button_resetpass:
+            self.entry_confirmpass.focus()
+        elif focused_widget == self.button_back:
+            self.button_resetpass.focus()
+        
+        return "break"  # Prevent default tab behavior
 
     def toggle_password_visibility(self, entry_widget, button_widget):
         """Toggle the visibility of the password field"""
@@ -170,6 +212,11 @@ class PasswordResetWindow:
             messagebox.showerror("Error", "Password must be at least 6 characters long")
             return
 
+        # Debug: Print the email being used for password reset
+        print(f"Attempting password reset for email: '{self.user_email}'")
+        print(f"Email type: {type(self.user_email)}")
+        print(f"Email length: {len(self.user_email) if self.user_email else 'None'}")
+        
         db_connection = await self.get_async_db_connection()
         if not db_connection:
             messagebox.showerror("Database Error", "Cannot connect to database")
@@ -177,14 +224,40 @@ class PasswordResetWindow:
 
         try:
             cursor = await db_connection.cursor()
+            
+            # First verify the user exists and is verified/active
+            query = "SELECT user_id FROM users WHERE email = %s AND is_verified = TRUE AND is_active = TRUE"
+            print(f"Executing query: {query}")
+            print(f"With email parameter: '{self.user_email}'")
+            
+            await cursor.execute(query, (self.user_email,))
+            user = await cursor.fetchone()
+            
+            print(f"User lookup result: {user}")  # Debug
+            
+            if not user:
+                # Additional debug: Check if user exists without verification check
+                await cursor.execute(
+                    "SELECT user_id, is_verified, is_active FROM users WHERE email = %s",
+                    (self.user_email,)
+                )
+                debug_user = await cursor.fetchone()
+                print(f"Debug user info: {debug_user}")  # Debug
+                
+                messagebox.showerror("Error", "Failed to reset password. User not found or account not verified.")
+                return
+            
+            # Update the password
             hashed_password = UtilityFunctions.hash_password(new_password)
             await cursor.execute(
-                "UPDATE users SET password_hash = %s WHERE email = %s",
+                "UPDATE users SET password_hash = %s WHERE email = %s AND is_verified = TRUE AND is_active = TRUE",
                 (hashed_password, self.user_email)
             )
+            
             if cursor.rowcount == 0:
                 messagebox.showerror("Error", "Failed to reset password. User not found.")
                 return
+                
             await db_connection.commit()
             messagebox.showinfo("Success", "Password reset successfully!")
             self.show_login_callback()
@@ -210,5 +283,15 @@ class PasswordResetWindow:
 
     def destroy(self):
         """Clean up the window"""
+        # Unbind all event bindings
+        try:
+            self.parent.unbind('<Tab>')
+            self.parent.unbind('<Shift-Tab>')
+            self.parent.unbind('<Control-r>')
+            self.parent.unbind('<Escape>')
+        except:
+            pass
+        
+        # Destroy all widgets
         for widget in self.parent.winfo_children():
             widget.destroy()

@@ -109,12 +109,28 @@ class DocumentWindow:
         return None
 
     def _get_student_id_from_user_id(self, user_id):
-        """Synchronous wrapper for async student_id lookup"""
+        """Get student_id from user_id - OPTIMIZED FOR SPEED"""
         try:
-            return asyncio.run(self._get_student_id_from_user_id_async(user_id))
+            # Use synchronous database connection for speed
+            db_connection = self.get_db_connection()
+            if db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("SELECT student_id FROM students WHERE user_id = %s", (user_id,))
+                result = cursor.fetchone()
+                cursor.close()
+                db_connection.close()
+                
+                if result:
+                    student_id = result[0]
+                    print(f"✅ Database lookup successful: user_id {user_id} -> student_id {student_id}")
+                    return student_id
+                else:
+                    print(f"❌ No student found with user_id: {user_id}")
+            else:
+                print("❌ No database connection available")
         except Exception as e:
-            print(f"❌ Error in sync wrapper: {e}")
-            return None
+            print(f"❌ Error getting student_id from user_id: {e}")
+        return None
 
     async def _get_student_id_from_number_async(self, student_number):
         """Get student_id from student_number asynchronously"""
@@ -140,12 +156,28 @@ class DocumentWindow:
         return None
 
     def _get_student_id_from_number(self, student_number):
-        """Synchronous wrapper for async student_id lookup"""
+        """Get student_id from student_number - OPTIMIZED FOR SPEED"""
         try:
-            return asyncio.run(self._get_student_id_from_number_async(student_number))
+            # Use synchronous database connection for speed
+            db_connection = self.get_db_connection()
+            if db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute("SELECT student_id FROM students WHERE student_number = %s", (student_number,))
+                result = cursor.fetchone()
+                cursor.close()
+                db_connection.close()
+                
+                if result:
+                    student_id = result[0]
+                    print(f"✅ Database lookup successful: {student_number} -> {student_id}")
+                    return student_id
+                else:
+                    print(f"❌ No student found with number: {student_number}")
+            else:
+                print("❌ No database connection available")
         except Exception as e:
-            print(f"❌ Error in sync wrapper: {e}")
-            return None
+            print(f"❌ Error getting student_id from number: {e}")
+        return None
 
     def _setup_ui(self):
         """Setup the document content only"""
@@ -423,9 +455,30 @@ class DocumentWindow:
             self.document_requests = []
 
     def load_document_requests(self):
-        """Synchronous wrapper for async document requests loading"""
+        """Synchronous wrapper for async document requests loading - FIXED"""
         try:
-            asyncio.run(self.load_document_requests_async())
+            # Use threading to avoid asyncio conflicts
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            
+            def run_async():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.load_document_requests_async())
+                    result_queue.put("success")
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_async)
+            thread.start()
+            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
+            
+            if result_queue.empty():
+                print(f"❌ Timeout loading document requests")
+                self.document_requests = []
         except Exception as e:
             print(f"❌ Error in sync wrapper: {e}")
             self.document_requests = []
@@ -645,9 +698,29 @@ class DocumentWindow:
                 messagebox.showerror("Error", f"Failed to check attachments: {str(e)}")
 
     def view_document(self, row_index):
-        """Synchronous wrapper for async document viewing"""
+        """Synchronous wrapper for async document viewing - FIXED"""
         try:
-            asyncio.run(self.view_document_async(row_index))
+            # Use threading to avoid asyncio conflicts
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            
+            def run_async():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.view_document_async(row_index))
+                    result_queue.put("success")
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_async)
+            thread.start()
+            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
+            
+            if result_queue.empty():
+                messagebox.showerror("Error", "Timeout viewing document")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to view document: {str(e)}")
 
@@ -688,13 +761,35 @@ class DocumentWindow:
             self.update_display()
 
     def refresh_requests(self):
-        """Refresh the document requests list"""
+        """Refresh the document requests list - FIXED"""
         print("🔄 Refreshing document requests...")
         try:
-            asyncio.run(self.load_document_requests_async())
+            # Use threading to avoid asyncio conflicts
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            
+            def run_async():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.load_document_requests_async())
+                    result_queue.put("success")
+                finally:
+                    loop.close()
+            
+            thread = threading.Thread(target=run_async)
+            thread.start()
+            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
+            
+            if result_queue.empty():
+                print(f"❌ Timeout refreshing requests")
+                self.document_requests = []
         except Exception as e:
             print(f"❌ Error refreshing requests: {e}")
             self.document_requests = []
+        
         self.current_page = 1
         self.update_display()
 

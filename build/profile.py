@@ -424,6 +424,18 @@ class ProfileWindow:
         self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                  relief="flat", bg="#FFF1C2", font=("Inter", 10))
         self.entry_contact.place(x=445.0, y=110.0, width=224.0, height=38.0)
+        
+        # Ensure the widget is properly initialized
+        try:
+            self.entry_contact.update_idletasks()
+            self.entry_contact.winfo_exists()
+        except Exception as e:
+            print(f"Warning: entry_contact initialization issue: {e}")
+            # Try to recreate it
+            self.entry_contact.destroy()
+            self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
+                                     relief="flat", bg="#FFF1C2", font=("Inter", 10))
+            self.entry_contact.place(x=445.0, y=110.0, width=224.0, height=38.0)
 
         # Date of Birth (adjusted y from 219 to 79)
         self.canvas.create_text(698.0, 79.0, anchor="nw", text="Date Of Birth", 
@@ -645,20 +657,51 @@ class ProfileWindow:
             self.canvas.itemconfig(self.name_display_id, state="normal")
             self.canvas.itemconfig(self.name_entry_bg, state="hidden")
         
-        # Entry fields
-        for entry in [self.entry_studentno, self.entry_email, self.entry_contact, self.entry_address]:
-            if editable:
-                entry.config(state="normal", bg="#FFF1C2")
-            else:
-                entry.config(state="readonly", readonlybackground="#FFF1C2")
+        # Entry fields - with safety checks
+        entry_fields = []
+        if hasattr(self, 'entry_studentno') and self.entry_studentno:
+            entry_fields.append(self.entry_studentno)
+        if hasattr(self, 'entry_email') and self.entry_email:
+            entry_fields.append(self.entry_email)
+        if hasattr(self, 'entry_contact') and self.entry_contact:
+            entry_fields.append(self.entry_contact)
+        if hasattr(self, 'entry_address') and self.entry_address:
+            entry_fields.append(self.entry_address)
+        
+        for entry in entry_fields:
+            try:
+                if editable:
+                    entry.config(state="normal", bg="#FFF1C2")
+                else:
+                    entry.config(state="readonly", readonlybackground="#FFF1C2")
+            except Exception as e:
+                print(f"Error setting entry field state: {e}")
         
         # Obligations field remains permanently disabled (readonly)
         # No need to change its state
         
-        # Combobox fields
-        for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 
-                     self.course, self.year_level, self.enrollment_status]:
-            combo.config(state=combo_state)
+        # Combobox fields - with safety checks
+        combo_fields = []
+        if hasattr(self, 'dob_month') and self.dob_month:
+            combo_fields.append(self.dob_month)
+        if hasattr(self, 'dob_day') and self.dob_day:
+            combo_fields.append(self.dob_day)
+        if hasattr(self, 'dob_year') and self.dob_year:
+            combo_fields.append(self.dob_year)
+        if hasattr(self, 'gender') and self.gender:
+            combo_fields.append(self.gender)
+        if hasattr(self, 'course') and self.course:
+            combo_fields.append(self.course)
+        if hasattr(self, 'year_level') and self.year_level:
+            combo_fields.append(self.year_level)
+        if hasattr(self, 'enrollment_status') and self.enrollment_status:
+            combo_fields.append(self.enrollment_status)
+        
+        for combo in combo_fields:
+            try:
+                combo.config(state=combo_state)
+            except Exception as e:
+                print(f"Error setting combo field state: {e}")
 
     def get_full_name_for_editing(self):
         """Get full name in format for editing: Firstname Middlename Lastname"""
@@ -714,51 +757,236 @@ class ProfileWindow:
         """Load default data when database is not available"""
         self.populate_form_fields()
 
+    def validate_and_fix_combobox_widgets(self):
+        """Validate and fix Combobox widgets if they're in invalid state"""
+        comboboxes = [
+            ('dob_month', self.dob_month),
+            ('dob_day', self.dob_day), 
+            ('dob_year', self.dob_year),
+            ('gender', self.gender),
+            ('course', self.course),
+            ('year_level', self.year_level),
+            ('enrollment_status', self.enrollment_status)
+        ]
+        
+        for name, widget in comboboxes:
+            try:
+                if hasattr(self, name) and widget:
+                    # Test if widget is working
+                    widget.winfo_exists()
+            except Exception as e:
+                print(f"Combobox {name} validation failed: {e}")
+                # Try to recreate the widget
+                self.recreate_combobox(name)
+    
+    def recreate_combobox(self, name):
+        """Recreate a specific combobox widget if it's corrupted"""
+        try:
+            # Destroy the old widget if it exists
+            if hasattr(self, name):
+                old_widget = getattr(self, name)
+                if old_widget:
+                    old_widget.destroy()
+            
+            # Recreate based on the widget type
+            if name == 'gender':
+                self.gender = ttk.Combobox(self.main_frame, values=["Male", "Female", "Other"],
+                                      state="readonly", style="Custom.TCombobox")
+                self.gender.place(x=998.0, y=110.0, width=195.0, height=38.0)
+            elif name == 'course':
+                self.course = ttk.Combobox(self.main_frame, values=[
+                    "Bachelor of Science in Information Technology", "Bachelor of Science in Computer Science",
+                    "Bachelor of Early Childhood Education", "Bachelor of Technology and Livelihood Education",
+                    "Bachelor of Science in Office Administration", "Bachelor of Science in Tourism Management",
+                    "Bachelor of Science in Hospitality Management"], state="readonly", style="Custom.TCombobox")
+                self.course.place(x=445.0, y=319.0, width=230.0, height=38.0)
+            elif name == 'year_level':
+                self.year_level = ttk.Combobox(self.main_frame, values=["1st Year", "2nd Year", "3rd Year", "4th Year"],
+                                          state="readonly", style="Custom.TCombobox")
+                self.year_level.place(x=706.0, y=319.0, width=230.0, height=38.0)
+            elif name == 'enrollment_status':
+                self.enrollment_status = ttk.Combobox(self.main_frame, values=["Enrolled", "Inactive", "Graduated", "Transferred"],
+                                                state="readonly", style="Custom.TCombobox")
+                self.enrollment_status.place(x=967.0, y=319.0, width=230.0, height=38.0)
+            
+            print(f"✅ Recreated {name} combobox widget")
+        except Exception as e:
+            print(f"Error recreating {name} combobox: {e}")
+
+    def validate_and_fix_entry_widgets(self):
+        """Validate and fix Entry widgets if they're in invalid state"""
+        try:
+            # Test if entry_contact is working properly
+            if hasattr(self, 'entry_contact') and self.entry_contact:
+                # Try a simple operation to test the widget
+                self.entry_contact.winfo_exists()
+        except Exception as e:
+            print(f"Entry widget validation failed: {e}")
+            # Recreate the problematic entry widget
+            self.recreate_entry_contact()
+    
+    def recreate_entry_contact(self):
+        """Recreate the entry_contact widget if it's corrupted"""
+        try:
+            # Destroy the old widget if it exists
+            if hasattr(self, 'entry_contact') and self.entry_contact:
+                self.entry_contact.destroy()
+            
+            # Create a new entry_contact widget
+            self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
+                                     relief="flat", bg="#FFF1C2", font=("Inter", 10))
+            self.entry_contact.place(x=445.0, y=110.0, width=224.0, height=38.0)
+            print("✅ Recreated entry_contact widget")
+        except Exception as e:
+            print(f"Error recreating entry_contact: {e}")
+
     def populate_form_fields(self):
         """Populate form fields with user data"""
+        # Validate and fix entry widgets first
+        self.validate_and_fix_entry_widgets()
+        
+        # Validate and fix combobox widgets
+        self.validate_and_fix_combobox_widgets()
+        
         # Clear any existing data first
         self.clear_fields()
         
-        # Student info
-        self.entry_studentno.insert(0, self.user_data.get('student_number', ''))
-        self.entry_email.insert(0, self.user_data.get('email', ''))
-        self.entry_contact.insert(0, self.user_data.get('contact_number', ''))
-        self.entry_address.insert(0, self.user_data.get('address', ''))
+        # Student info - with comprehensive safety checks
+        try:
+            if hasattr(self, 'entry_studentno') and self.entry_studentno:
+                self.entry_studentno.insert(0, self.user_data.get('student_number', ''))
+        except Exception as e:
+            print(f"Error populating student number: {e}")
         
-        # Date of birth
+        try:
+            if hasattr(self, 'entry_email') and self.entry_email:
+                self.entry_email.insert(0, self.user_data.get('email', ''))
+        except Exception as e:
+            print(f"Error populating email: {e}")
+        
+        try:
+            if hasattr(self, 'entry_contact') and self.entry_contact:
+                # Use a safer method to insert text
+                contact_value = self.user_data.get('contact_number', '')
+                if contact_value:
+                    # Clear first, then insert
+                    self.entry_contact.delete(0, 'end')
+                    self.entry_contact.insert(0, contact_value)
+        except Exception as e:
+            print(f"Error populating contact number: {e}")
+            # Try alternative method
+            try:
+                if hasattr(self, 'entry_contact') and self.entry_contact:
+                    contact_value = self.user_data.get('contact_number', '')
+                    # Create a StringVar for the entry
+                    from tkinter import StringVar
+                    contact_var = StringVar(value=contact_value)
+                    self.entry_contact.config(textvariable=contact_var)
+            except Exception as e2:
+                print(f"Alternative method also failed: {e2}")
+        
+        try:
+            if hasattr(self, 'entry_address') and self.entry_address:
+                self.entry_address.insert(0, self.user_data.get('address', ''))
+        except Exception as e:
+            print(f"Error populating address: {e}")
+        
+        # Date of birth - with comprehensive safety checks
         birth_date = self.user_data.get('birth_date')
         if birth_date:
-            if hasattr(birth_date, 'strftime'):
-                # It's a datetime object
-                self.dob_month.set(birth_date.strftime('%B'))
-                self.dob_day.set(str(birth_date.day))
-                self.dob_year.set(str(birth_date.year))
-            else:
-                # It's a string, try to parse
-                try:
-                    date_obj = datetime.datetime.strptime(str(birth_date), '%Y-%m-%d')
-                    self.dob_month.set(date_obj.strftime('%B'))
-                    self.dob_day.set(str(date_obj.day))
-                    self.dob_year.set(str(date_obj.year))
-                except:
-                    pass
+            try:
+                if hasattr(birth_date, 'strftime'):
+                    # It's a datetime object
+                    try:
+                        if hasattr(self, 'dob_month') and self.dob_month:
+                            self.dob_month.set(birth_date.strftime('%B'))
+                    except Exception as e:
+                        print(f"Error setting DOB month: {e}")
+                    
+                    try:
+                        if hasattr(self, 'dob_day') and self.dob_day:
+                            self.dob_day.set(str(birth_date.day))
+                    except Exception as e:
+                        print(f"Error setting DOB day: {e}")
+                    
+                    try:
+                        if hasattr(self, 'dob_year') and self.dob_year:
+                            self.dob_year.set(str(birth_date.year))
+                    except Exception as e:
+                        print(f"Error setting DOB year: {e}")
+                else:
+                    # It's a string, try to parse
+                    try:
+                        date_obj = datetime.datetime.strptime(str(birth_date), '%Y-%m-%d')
+                        try:
+                            if hasattr(self, 'dob_month') and self.dob_month:
+                                self.dob_month.set(date_obj.strftime('%B'))
+                        except Exception as e:
+                            print(f"Error setting DOB month from string: {e}")
+                        
+                        try:
+                            if hasattr(self, 'dob_day') and self.dob_day:
+                                self.dob_day.set(str(date_obj.day))
+                        except Exception as e:
+                            print(f"Error setting DOB day from string: {e}")
+                        
+                        try:
+                            if hasattr(self, 'dob_year') and self.dob_year:
+                                self.dob_year.set(str(date_obj.year))
+                        except Exception as e:
+                            print(f"Error setting DOB year from string: {e}")
+                    except Exception as e:
+                        print(f"Error parsing birth date: {e}")
+            except Exception as e:
+                print(f"Error processing birth date: {e}")
         
-        # Other fields
-        self.gender.set(self.user_data.get('gender', ''))
-        self.course.set(self.user_data.get('course', ''))
-        self.year_level.set(self.user_data.get('year_level', ''))
-        self.enrollment_status.set(self.user_data.get('enrollment_status', ''))
+        # Other fields - with comprehensive safety checks
+        try:
+            if hasattr(self, 'gender') and self.gender:
+                gender_value = self.user_data.get('gender', '')
+                if gender_value:
+                    self.gender.set(gender_value)
+        except Exception as e:
+            print(f"Error setting gender: {e}")
         
-        # Obligations - always readonly
+        try:
+            if hasattr(self, 'course') and self.course:
+                course_value = self.user_data.get('course', '')
+                if course_value:
+                    self.course.set(course_value)
+        except Exception as e:
+            print(f"Error setting course: {e}")
+        
+        try:
+            if hasattr(self, 'year_level') and self.year_level:
+                year_value = self.user_data.get('year_level', '')
+                if year_value:
+                    self.year_level.set(year_value)
+        except Exception as e:
+            print(f"Error setting year level: {e}")
+        
+        try:
+            if hasattr(self, 'enrollment_status') and self.enrollment_status:
+                status_value = self.user_data.get('enrollment_status', '')
+                if status_value:
+                    self.enrollment_status.set(status_value)
+        except Exception as e:
+            print(f"Error setting enrollment status: {e}")
+        
+        # Obligations - always readonly - with safety checks
         obligations_text = "No outstanding obligations."
         if self.user_data.get('has_obligations'):
             obligations_text = self.user_data.get('obligations_details', 'Has obligations. Please contact registrar.')
         
         # Temporarily enable to insert text, then disable again
-        self.entry_obligations.config(state="normal")
-        self.entry_obligations.delete('1.0', 'end')
-        self.entry_obligations.insert("1.0", obligations_text)
-        self.entry_obligations.config(state="disabled")
+        if hasattr(self, 'entry_obligations') and self.entry_obligations:
+            try:
+                self.entry_obligations.config(state="normal")
+                self.entry_obligations.delete('1.0', 'end')
+                self.entry_obligations.insert("1.0", obligations_text)
+                self.entry_obligations.config(state="disabled")
+            except Exception as e:
+                print(f"Error setting obligations text: {e}")
         
         # Update name display
         self.update_name_display()
@@ -913,21 +1141,61 @@ class ProfileWindow:
 
     def clear_fields(self):
         """Clear all form fields"""
-        for entry in [self.entry_studentno, self.entry_email, self.entry_contact, self.entry_address]:
-            entry.delete(0, 'end')
+        # Clear entry fields with safety checks
+        entry_fields = []
+        if hasattr(self, 'entry_studentno') and self.entry_studentno:
+            entry_fields.append(self.entry_studentno)
+        if hasattr(self, 'entry_email') and self.entry_email:
+            entry_fields.append(self.entry_email)
+        if hasattr(self, 'entry_contact') and self.entry_contact:
+            entry_fields.append(self.entry_contact)
+        if hasattr(self, 'entry_address') and self.entry_address:
+            entry_fields.append(self.entry_address)
+        
+        for entry in entry_fields:
+            try:
+                entry.delete(0, 'end')
+            except Exception as e:
+                print(f"Error clearing entry field: {e}")
         
         # Only clear the name entry if it exists
-        if self.entry_fullname is not None:
-            self.entry_fullname.delete(0, 'end')
+        if hasattr(self, 'entry_fullname') and self.entry_fullname is not None:
+            try:
+                self.entry_fullname.delete(0, 'end')
+            except Exception as e:
+                print(f"Error clearing name entry: {e}")
         
-        for combo in [self.dob_month, self.dob_day, self.dob_year, self.gender, 
-                     self.course, self.year_level, self.enrollment_status]:
-            combo.set('')
+        # Clear combobox fields with safety checks
+        combo_fields = []
+        if hasattr(self, 'dob_month') and self.dob_month:
+            combo_fields.append(self.dob_month)
+        if hasattr(self, 'dob_day') and self.dob_day:
+            combo_fields.append(self.dob_day)
+        if hasattr(self, 'dob_year') and self.dob_year:
+            combo_fields.append(self.dob_year)
+        if hasattr(self, 'gender') and self.gender:
+            combo_fields.append(self.gender)
+        if hasattr(self, 'course') and self.course:
+            combo_fields.append(self.course)
+        if hasattr(self, 'year_level') and self.year_level:
+            combo_fields.append(self.year_level)
+        if hasattr(self, 'enrollment_status') and self.enrollment_status:
+            combo_fields.append(self.enrollment_status)
+        
+        for combo in combo_fields:
+            try:
+                combo.set('')
+            except Exception as e:
+                print(f"Error clearing combo field: {e}")
         
         # Clear obligations (temporarily enable to clear, then disable)
-        self.entry_obligations.config(state="normal")
-        self.entry_obligations.delete('1.0', 'end')
-        self.entry_obligations.config(state="disabled")
+        if hasattr(self, 'entry_obligations') and self.entry_obligations:
+            try:
+                self.entry_obligations.config(state="normal")
+                self.entry_obligations.delete('1.0', 'end')
+                self.entry_obligations.config(state="disabled")
+            except Exception as e:
+                print(f"Error clearing obligations field: {e}")
 
     def destroy(self):
         """Clean up when window is closed"""
