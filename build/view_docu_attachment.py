@@ -10,9 +10,6 @@ import tempfile
 from PIL import Image, ImageTk
 import io
 import base64
-import asyncio
-import aiofiles
-from concurrent.futures import ThreadPoolExecutor
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -50,12 +47,9 @@ class DocumentAttachmentViewer:
         # Store image references to prevent garbage collection
         self.images = []
         
-        # Thread pool for async operations
-        self.executor = ThreadPoolExecutor(max_workers=4)
-        
         self.setup_ui()
-        # Load attachments asynchronously after UI is set up
-        self.window.after(100, self._start_loading_attachments)
+        # Load attachments synchronously after UI is set up
+        self.window.after(100, self.load_attachments)
         
     def setup_ui(self):
         """Setup the main UI window"""
@@ -296,45 +290,30 @@ class DocumentAttachmentViewer:
         )
         self.close_button.place(x=580, y=620, width=100, height=35)
     
-    def _start_loading_attachments(self):
-        """Start loading attachments asynchronously"""
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.load_attachments_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load attachments: {str(e)}")
-        
-    async def load_attachments_async(self):
-        """Load attachments from database asynchronously"""
+    def load_attachments(self):
+        """Load attachments from database synchronously"""
         try:
             if not self.request_id:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showwarning("Warning", "No request ID provided")
-                )
+                messagebox.showwarning("Warning", "No request ID provided")
                 return
                 
-            # Run database operation in thread pool
-            attachments = await self.run_in_thread_pool(self._fetch_attachments_from_db)
+            # Fetch attachments from database
+            attachments = self._fetch_attachments_from_db()
             
             if not attachments:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showinfo("Info", "No attachments found for this request")
-                )
+                messagebox.showinfo("Info", "No attachments found for this request")
                 return
                 
             self.attachments = attachments
             
-            # Update UI in main thread
-            await self.run_in_main_thread(self._update_ui_after_load)
+            # Update UI
+            self._update_ui_after_load()
             
         except Exception as e:
-            await self.run_in_main_thread(
-                lambda: messagebox.showerror("Database Error", f"Failed to load attachments: {str(e)}")
-            )
+            messagebox.showerror("Database Error", f"Failed to load attachments: {str(e)}")
     
     def _fetch_attachments_from_db(self):
-        """Fetch attachments from database (runs in thread pool)"""
+        """Fetch attachments from database"""
         connection = self.get_db_connection()
         if not connection:
             raise Exception("Could not connect to database")
@@ -365,19 +344,9 @@ class DocumentAttachmentViewer:
             connection.close()
     
     def _update_ui_after_load(self):
-        """Update UI after loading attachments (runs in main thread)"""
+        """Update UI after loading attachments"""
         self.update_navigation_buttons()
         self.show_attachment(0)
-    
-    async def run_in_main_thread(self, func):
-        """Run function in main thread"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, func)
-    
-    async def run_in_thread_pool(self, func):
-        """Run function in thread pool"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self.executor, func)
             
     def update_navigation_buttons(self):
         """Update navigation button states"""
@@ -676,41 +645,29 @@ class DocumentAttachmentViewer:
             if self.current_attachment_index < len(self.attachments) - 1:
                 self.show_attachment(self.current_attachment_index + 1)
             
-    async def download_attachment_async(self):
-        """Download the current attachment asynchronously"""
+    def download_attachment(self):
+        """Download the current attachment"""
         if not self.attachments or self.current_attachment_index >= len(self.attachments):
             return
             
         attachment = self.attachments[self.current_attachment_index]
         
-        # Ask user for save location (run in main thread)
-        file_path = await self.run_in_main_thread(lambda: filedialog.asksaveasfilename(
+        # Ask user for save location
+        file_path = filedialog.asksaveasfilename(
             title="Save Attachment",
             defaultextension="",
             filetypes=[("All files", "*.*")],
             initialfile=attachment['file_name']
-        ))
+        )
         
         if file_path:
             try:
-                # Write file asynchronously
-                await self._write_file_async(file_path, attachment['file_data'])
-                await self.run_in_main_thread(
-                    lambda: messagebox.showinfo("Success", f"File saved successfully to:\n{file_path}")
-                )
+                # Write file synchronously
+                with open(file_path, 'wb') as f:
+                    f.write(attachment['file_data'])
+                messagebox.showinfo("Success", f"File saved successfully to:\n{file_path}")
             except Exception as e:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showerror("Error", f"Failed to save file: {str(e)}")
-                )
-    
-    async def _write_file_async(self, file_path, file_data):
-        """Write file data asynchronously"""
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(file_data)
-    
-    def download_attachment(self):
-        """Synchronous wrapper for download_attachment_async"""
-        asyncio.create_task(self.download_attachment_async())
+                messagebox.showerror("Error", f"Failed to save file: {str(e)}")
                 
     def open_feedback_dialog(self):
         """Open feedback dialog with the layout shown in the image"""
@@ -847,13 +804,11 @@ class DocumentAttachmentViewer:
                 # Outline star
                 star_button.config(fg="#D4AF37", text="☆")  # Light brown/gray
     
-    async def submit_feedback_async(self, dialog):
-        """Submit feedback to database asynchronously"""
+    def submit_feedback(self, dialog):
+        """Submit feedback to database"""
         try:
             if not self.request_id:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showerror("Error", "No request ID available")
-                )
+                messagebox.showerror("Error", "No request ID available")
                 return
             
             # Get feedback data
@@ -861,34 +816,24 @@ class DocumentAttachmentViewer:
             rating = self.star_rating
             
             if rating == 0:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showwarning("Warning", "Please select a rating")
-                )
+                messagebox.showwarning("Warning", "Please select a rating")
                 return
             
             if not comments:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showwarning("Warning", "Please enter your feedback comments")
-                )
+                messagebox.showwarning("Warning", "Please enter your feedback comments")
                 return
             
-            # Run database operations in thread pool
-            message = await self.run_in_thread_pool(
-                lambda: self._submit_feedback_to_db(rating, comments)
-            )
+            # Submit to database
+            message = self._submit_feedback_to_db(rating, comments)
             
-            await self.run_in_main_thread(
-                lambda: messagebox.showinfo("Success", message)
-            )
-            await self.run_in_main_thread(dialog.destroy)
+            messagebox.showinfo("Success", message)
+            dialog.destroy()
             
         except Exception as e:
-            await self.run_in_main_thread(
-                lambda: messagebox.showerror("Error", f"Failed to submit feedback: {str(e)}")
-            )
+            messagebox.showerror("Error", f"Failed to submit feedback: {str(e)}")
     
     def _submit_feedback_to_db(self, rating, comments):
-        """Submit feedback to database (runs in thread pool)"""
+        """Submit feedback to database"""
         connection = self.get_db_connection()
         if not connection:
             raise Exception("Could not connect to database")
@@ -927,10 +872,6 @@ class DocumentAttachmentViewer:
         finally:
             connection.close()
     
-    def submit_feedback(self, dialog):
-        """Synchronous wrapper for submit_feedback_async"""
-        asyncio.create_task(self.submit_feedback_async(dialog))
-                
     def close_window(self):
         """Close the window and cleanup"""
         # Cleanup PDF document
@@ -948,10 +889,6 @@ class DocumentAttachmentViewer:
                     os.remove(temp_file)
             except:
                 pass
-        
-        # Shutdown thread pool executor
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
                 
         self.window.destroy()
 

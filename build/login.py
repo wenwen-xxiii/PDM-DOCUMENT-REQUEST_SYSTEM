@@ -1,13 +1,11 @@
-#login.py
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
-import aiomysql
-import asyncio
 from utils import UtilityFunctions
 from config import DB_CONFIG
 import sys
 import os
+from datetime import datetime
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -36,21 +34,6 @@ class LoginWindow:
         self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
         
         self.setup_ui()
-        
-    async def get_async_db_connection(self):
-        """Get async database connection"""
-        try:
-            connection = await aiomysql.connect(
-                host=DB_CONFIG['host'],
-                user=DB_CONFIG['user'],
-                password=DB_CONFIG['password'],
-                db=DB_CONFIG['database'],
-                port=DB_CONFIG['port']
-            )
-            return connection
-        except Exception as e:
-            print(f"Async database connection failed: {e}")
-            return None
         
     def setup_ui(self):
         # Clear any existing widgets first
@@ -184,8 +167,8 @@ class LoginWindow:
             entry_widget.config(show="●")
             button_widget.config(image=self.button_view_img)
 
-    async def attempt_login_async(self):
-        """Attempt login asynchronously"""
+    def attempt_login(self):
+        """Attempt login synchronously and track last login"""
         username_input = self.entry_username.get().strip()
         password = self.entry_pass.get().strip()
 
@@ -193,18 +176,18 @@ class LoginWindow:
             messagebox.showerror("Error", "Please enter both username/email and password")
             return
 
-        db_connection = await self.get_async_db_connection()
+        db_connection = self.get_db_connection()
         if not db_connection:
             messagebox.showerror("Database Error", "Cannot connect to database")
             return
 
         try:
-            cursor = await db_connection.cursor(aiomysql.DictCursor)
+            cursor = db_connection.cursor(dictionary=True)
             
             # Determine if input is email or student number
             if UtilityFunctions.is_valid_email(username_input):
                 # Input is an email - search by email
-                await cursor.execute("""
+                cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
                     LEFT JOIN students s ON u.user_id = s.user_id 
@@ -212,7 +195,7 @@ class LoginWindow:
                 """, (username_input,))
             else:
                 # Input is likely a student number - search by student number or username
-                await cursor.execute("""
+                cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
                     LEFT JOIN students s ON u.user_id = s.user_id 
@@ -220,9 +203,17 @@ class LoginWindow:
                     AND u.is_verified = TRUE AND u.is_active = TRUE
                 """, (username_input, username_input))
             
-            user = await cursor.fetchone()
+            user = cursor.fetchone()
 
             if user and UtilityFunctions.verify_password(password, user['password_hash']):
+                # Update last login timestamp
+                cursor.execute("""
+                    UPDATE users 
+                    SET last_login = CURRENT_TIMESTAMP 
+                    WHERE user_id = %s
+                """, (user['user_id'],))
+                db_connection.commit()
+                
                 # Prepare user data for session
                 user_data = {
                     'user_id': user['user_id'],
@@ -233,7 +224,8 @@ class LoginWindow:
                     'student_number': user.get('student_number', ''),
                     'course': user.get('course', ''),
                     'year_level': user.get('year_level', ''),
-                    'user_type': user['user_type']
+                    'user_type': user['user_type'],
+                    'last_login': user.get('last_login')  # Include previous last login for display
                 }
                 
                 # Check if student has outstanding obligations
@@ -254,15 +246,8 @@ class LoginWindow:
             messagebox.showerror("Database Error", f"Login failed: {str(e)}")
         finally:
             if db_connection:
-                await db_connection.ensure_closed()
-
-    def attempt_login(self):
-        """Synchronous wrapper for async login attempt"""
-        try:
-            # Run the async function in a new event loop
-            asyncio.run(self.attempt_login_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to login: {str(e)}")
+                cursor.close()
+                db_connection.close()
 
     def destroy(self):
         """Clean up the window"""

@@ -66,6 +66,24 @@ class UtilityFunctions:
             return f"PDM-{year_part}-{number_part}"
         
         return student_number.upper()
+    
+    @staticmethod
+    def format_last_login(last_login):
+        """Format last login timestamp for display"""
+        if not last_login:
+            return "Never logged in"
+        
+        try:
+            if isinstance(last_login, str):
+                # If it's already a string, try to parse and format it
+                dt = datetime.strptime(last_login, '%Y-%m-%d %H:%M:%S')
+                return dt.strftime('%B %d, %Y at %I:%M %p')
+            else:
+                # If it's a datetime object
+                return last_login.strftime('%B %d, %Y at %I:%M %p')
+        except Exception:
+            # If parsing fails, return as is
+            return str(last_login)
 
 
 class EmailService:
