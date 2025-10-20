@@ -1,8 +1,6 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, messagebox, StringVar, Frame
 import mysql.connector
-import aiomysql
-import asyncio
 from datetime import datetime
 import sys
 import os
@@ -24,7 +22,8 @@ class DocumentWindow:
         self.get_db_connection = get_db_connection
         self.navigation_callbacks = navigation_callbacks or {}
         
-        self.student_id = self._get_student_id()
+        # Get student_id immediately and cache it
+        self.student_id = self._get_student_id_fast()
         self.current_page = 1
         self.requests_per_page = 4
         self.document_requests = []
@@ -36,147 +35,50 @@ class DocumentWindow:
         self.entry_bg_ids = []
         
         self._setup_ui()
-        self.load_document_requests()
+        self.load_document_requests_fast()
         self.update_display()
 
-    async def get_async_db_connection(self):
-        """Get async database connection"""
-        try:
-            connection = await aiomysql.connect(
-                host=DB_CONFIG['host'],
-                user=DB_CONFIG['user'],
-                password=DB_CONFIG['password'],
-                db=DB_CONFIG['database'],
-                port=DB_CONFIG['port']
-            )
-            return connection
-        except Exception as e:
-            print(f"Async database connection failed: {e}")
-            return None
-
-    def _get_student_id(self):
-        """Get student_id from user_data - FIXED VERSION"""
-        print(f"🔍 DEBUG: Getting student_id from user_data: {self.user_data}")
-        
+    def _get_student_id_fast(self):
+        """Get student_id from user_data - OPTIMIZED FOR SPEED"""
         # Method 1: Try to get student_id directly from user_data
         student_id = self.user_data.get('student_id')
         if student_id:
-            print(f"✅ Found student_id from user_data['student_id']: {student_id}")
             return student_id
         
-        # Method 2: Try to get from user_id lookup
+        # Method 2: Try to get from user_id lookup (synchronous for speed)
         user_id = self.user_data.get('user_id')
         if user_id:
-            print(f"🔍 Looking up student_id from user_id: {user_id}")
-            looked_up_id = self._get_student_id_from_user_id(user_id)
-            if looked_up_id:
-                print(f"✅ Found student_id from user_id lookup: {looked_up_id}")
-                return looked_up_id
+            try:
+                db_connection = self.get_db_connection()
+                if db_connection:
+                    cursor = db_connection.cursor()
+                    cursor.execute("SELECT student_id FROM students WHERE user_id = %s", (user_id,))
+                    result = cursor.fetchone()
+                    cursor.close()
+                    db_connection.close()
+                    
+                    if result:
+                        return result[0]
+            except Exception as e:
+                print(f"Error getting student_id from user_id: {e}")
         
-        # Method 3: Try to get from student_number lookup
+        # Method 3: Try to get from student_number lookup (synchronous for speed)
         student_number = self.user_data.get('student_number')
         if student_number:
-            print(f"🔍 Looking up student_id from student_number: {student_number}")
-            looked_up_id = self._get_student_id_from_number(student_number)
-            if looked_up_id:
-                print(f"✅ Found student_id from student_number lookup: {looked_up_id}")
-                return looked_up_id
+            try:
+                db_connection = self.get_db_connection()
+                if db_connection:
+                    cursor = db_connection.cursor()
+                    cursor.execute("SELECT student_id FROM students WHERE student_number = %s", (student_number,))
+                    result = cursor.fetchone()
+                    cursor.close()
+                    db_connection.close()
+                    
+                    if result:
+                        return result[0]
+            except Exception as e:
+                print(f"Error getting student_id from student_number: {e}")
         
-        print(f"❌ ERROR: Could not find student_id in user_data: {self.user_data}")
-        return None
-
-    async def _get_student_id_from_user_id_async(self, user_id):
-        """Get student_id from user_id asynchronously"""
-        try:
-            db_connection = await self.get_async_db_connection()
-            if db_connection:
-                cursor = await db_connection.cursor()
-                await cursor.execute("SELECT student_id FROM students WHERE user_id = %s", (user_id,))
-                result = await cursor.fetchone()
-                await cursor.close()
-                await db_connection.ensure_closed()
-                
-                if result:
-                    student_id = result[0]
-                    print(f"✅ Database lookup successful: user_id {user_id} -> student_id {student_id}")
-                    return student_id
-                else:
-                    print(f"❌ No student found with user_id: {user_id}")
-            else:
-                print("❌ No database connection available")
-        except Exception as e:
-            print(f"❌ Error getting student_id from user_id: {e}")
-        return None
-
-    def _get_student_id_from_user_id(self, user_id):
-        """Get student_id from user_id - OPTIMIZED FOR SPEED"""
-        try:
-            # Use synchronous database connection for speed
-            db_connection = self.get_db_connection()
-            if db_connection:
-                cursor = db_connection.cursor()
-                cursor.execute("SELECT student_id FROM students WHERE user_id = %s", (user_id,))
-                result = cursor.fetchone()
-                cursor.close()
-                db_connection.close()
-                
-                if result:
-                    student_id = result[0]
-                    print(f"✅ Database lookup successful: user_id {user_id} -> student_id {student_id}")
-                    return student_id
-                else:
-                    print(f"❌ No student found with user_id: {user_id}")
-            else:
-                print("❌ No database connection available")
-        except Exception as e:
-            print(f"❌ Error getting student_id from user_id: {e}")
-        return None
-
-    async def _get_student_id_from_number_async(self, student_number):
-        """Get student_id from student_number asynchronously"""
-        try:
-            db_connection = await self.get_async_db_connection()
-            if db_connection:
-                cursor = await db_connection.cursor()
-                await cursor.execute("SELECT student_id FROM students WHERE student_number = %s", (student_number,))
-                result = await cursor.fetchone()
-                await cursor.close()
-                await db_connection.ensure_closed()
-                
-                if result:
-                    student_id = result[0]
-                    print(f"✅ Database lookup successful: {student_number} -> {student_id}")
-                    return student_id
-                else:
-                    print(f"❌ No student found with number: {student_number}")
-            else:
-                print("❌ No database connection available")
-        except Exception as e:
-            print(f"❌ Error getting student_id from number: {e}")
-        return None
-
-    def _get_student_id_from_number(self, student_number):
-        """Get student_id from student_number - OPTIMIZED FOR SPEED"""
-        try:
-            # Use synchronous database connection for speed
-            db_connection = self.get_db_connection()
-            if db_connection:
-                cursor = db_connection.cursor()
-                cursor.execute("SELECT student_id FROM students WHERE student_number = %s", (student_number,))
-                result = cursor.fetchone()
-                cursor.close()
-                db_connection.close()
-                
-                if result:
-                    student_id = result[0]
-                    print(f"✅ Database lookup successful: {student_number} -> {student_id}")
-                    return student_id
-                else:
-                    print(f"❌ No student found with number: {student_number}")
-            else:
-                print("❌ No database connection available")
-        except Exception as e:
-            print(f"❌ Error getting student_id from number: {e}")
         return None
 
     def _setup_ui(self):
@@ -398,30 +300,24 @@ class DocumentWindow:
         )
         self.entry_pageno.place(x=583.0, y=539.0, width=139.0, height=36.0)
         
-    async def load_document_requests_async(self):
-        """Load document requests from database asynchronously - FIXED VERSION"""
+    def load_document_requests_fast(self):
+        """Load document requests from database - OPTIMIZED FOR SPEED"""
         try:
-            print(f"🔍 DEBUG: Loading document requests for student_id: {self.student_id}")
-            
             if not self.student_id:
                 print("❌ ERROR: No student_id available")
                 self.document_requests = []
                 return
                 
-            db_connection = await self.get_async_db_connection()
+            db_connection = self.get_db_connection()
             if not db_connection:
                 print("❌ ERROR: Could not connect to database")
                 self.document_requests = []
                 return
                 
-            cursor = await db_connection.cursor(aiomysql.DictCursor)
+            cursor = db_connection.cursor(dictionary=True)
             
-            # First, let's verify what student_id we're using
-            await cursor.execute("SELECT student_id, student_number FROM students WHERE student_id = %s", (self.student_id,))
-            student_info = await cursor.fetchone()
-            print(f"🔍 DEBUG: Student info from database: {student_info}")
-            
-            await cursor.execute("""
+            # Single optimized query to get all document requests
+            cursor.execute("""
                 SELECT 
                     dr.request_id,
                     dr.request_number,
@@ -440,47 +336,16 @@ class DocumentWindow:
                 ORDER BY dr.request_date DESC
             """, (self.student_id,))
             
-            self.document_requests = await cursor.fetchall()
+            self.document_requests = cursor.fetchall()
             
-            print(f"🔍 DEBUG: Found {len(self.document_requests)} document requests")
-            for req in self.document_requests:
-                print(f"🔍 DEBUG: Request {req['request_number']} belongs to student_id: {req['student_id']}")
+            print(f"✅ Loaded {len(self.document_requests)} document requests")
             
-            await cursor.close()
-            await db_connection.ensure_closed()
+            cursor.close()
+            db_connection.close()
             
         except Exception as e:
-            print(f"❌ Unexpected error loading document requests: {str(e)}")
+            print(f"❌ Error loading document requests: {str(e)}")
             messagebox.showerror("Database Error", f"Failed to load document requests: {str(e)}")
-            self.document_requests = []
-
-    def load_document_requests(self):
-        """Synchronous wrapper for async document requests loading - FIXED"""
-        try:
-            # Use threading to avoid asyncio conflicts
-            import threading
-            import queue
-            
-            result_queue = queue.Queue()
-            
-            def run_async():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self.load_document_requests_async())
-                    result_queue.put("success")
-                finally:
-                    loop.close()
-            
-            thread = threading.Thread(target=run_async)
-            thread.start()
-            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
-            
-            if result_queue.empty():
-                print(f"❌ Timeout loading document requests")
-                self.document_requests = []
-        except Exception as e:
-            print(f"❌ Error in sync wrapper: {e}")
             self.document_requests = []
 
     def update_display(self):
@@ -650,29 +515,29 @@ class DocumentWindow:
         )
         self.request_window.run()
 
-    async def view_document_async(self, row_index):
-        """View document details and attachments asynchronously"""
+    def view_document(self, row_index):
+        """View document details and attachments - OPTIMIZED FOR SPEED"""
         start_idx = (self.current_page - 1) * self.requests_per_page
         actual_index = start_idx + row_index
         
         if actual_index < len(self.document_requests):
             request = self.document_requests[actual_index]
             
-            # Check if document has attachments
+            # Check if document has attachments using synchronous connection
             try:
-                db_connection = await self.get_async_db_connection()
+                db_connection = self.get_db_connection()
                 if db_connection:
-                    cursor = await db_connection.cursor()
-                    await cursor.execute("""
+                    cursor = db_connection.cursor()
+                    cursor.execute("""
                         SELECT COUNT(*) as attachment_count 
                         FROM document_attachments 
                         WHERE request_id = %s
                     """, (request['request_id'],))
                     
-                    result = await cursor.fetchone()
+                    result = cursor.fetchone()
                     attachment_count = result[0] if result else 0
-                    await cursor.close()
-                    await db_connection.ensure_closed()
+                    cursor.close()
+                    db_connection.close()
                     
                     if attachment_count > 0:
                         # Open attachment viewer
@@ -696,33 +561,6 @@ class DocumentWindow:
                     messagebox.showerror("Error", "Could not connect to database")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to check attachments: {str(e)}")
-
-    def view_document(self, row_index):
-        """Synchronous wrapper for async document viewing - FIXED"""
-        try:
-            # Use threading to avoid asyncio conflicts
-            import threading
-            import queue
-            
-            result_queue = queue.Queue()
-            
-            def run_async():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self.view_document_async(row_index))
-                    result_queue.put("success")
-                finally:
-                    loop.close()
-            
-            thread = threading.Thread(target=run_async)
-            thread.start()
-            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
-            
-            if result_queue.empty():
-                messagebox.showerror("Error", "Timeout viewing document")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to view document: {str(e)}")
 
     def make_payment(self, row_index):
         """Process payment for document request"""
@@ -761,37 +599,22 @@ class DocumentWindow:
             self.update_display()
 
     def refresh_requests(self):
-        """Refresh the document requests list - FIXED"""
+        """Refresh the document requests list - OPTIMIZED FOR SPEED"""
         print("🔄 Refreshing document requests...")
-        try:
-            # Use threading to avoid asyncio conflicts
-            import threading
-            import queue
-            
-            result_queue = queue.Queue()
-            
-            def run_async():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self.load_document_requests_async())
-                    result_queue.put("success")
-                finally:
-                    loop.close()
-            
-            thread = threading.Thread(target=run_async)
-            thread.start()
-            thread.join(timeout=15)  # Increased timeout to 15 seconds for database operations
-            
-            if result_queue.empty():
-                print(f"❌ Timeout refreshing requests")
-                self.document_requests = []
-        except Exception as e:
-            print(f"❌ Error refreshing requests: {e}")
-            self.document_requests = []
-        
+        self.load_document_requests_fast()
         self.current_page = 1
         self.update_display()
+    
+    def refresh_if_needed(self):
+        """Refresh data only if window is being shown after being hidden"""
+        # This method can be called when switching back to the document window
+        # to ensure data is up-to-date
+        try:
+            # Quick refresh without full reload
+            self.load_document_requests_fast()
+            self.update_display()
+        except Exception as e:
+            print(f"Error refreshing document data: {e}")
 
     def destroy(self):
         """Clean up when window is closed"""

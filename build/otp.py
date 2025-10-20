@@ -222,8 +222,8 @@ class OTPVerificationWindow:
         """Setup the 6 OTP entry fields with proper alignment"""
         # Adjusted positions for better alignment
         entry_positions = [
-            (393.0, 235.0), (438.0, 235.0), (483.0, 235.0),
-            (528.0, 235.0), (573.0, 235.0), (618.0, 235.0)
+            (393.0, 233.0), (438.0, 233.0), (483.0, 233.0),
+            (528.0, 233.0), (573.0, 233.0), (618.0, 233.0)
         ]
         
         vcmd = (self.parent.register(self.validate_numeric), '%P')

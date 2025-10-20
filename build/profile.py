@@ -716,6 +716,10 @@ class ProfileWindow:
             name_parts.append(middle_name)
         if last_name:
             name_parts.append(last_name)
+        
+        # If no name parts exist, return empty string for editing
+        if not name_parts:
+            return ""
             
         return " ".join(name_parts)
 
@@ -729,7 +733,7 @@ class ProfileWindow:
             connection = self.get_db_connection()
             cursor = connection.cursor(dictionary=True)
             
-            # Get student data with user email
+            # Get student data with user email - handle case where student record might be incomplete
             cursor.execute("""
                 SELECT s.*, u.email 
                 FROM students s 
@@ -740,18 +744,73 @@ class ProfileWindow:
             student_data = cursor.fetchone()
             
             if student_data:
-                self.user_data.update(student_data)
+                # Update user_data with database values, but preserve existing values for missing fields
+                for key, value in student_data.items():
+                    if value is not None and value != '':  # Only update if value exists
+                        self.user_data[key] = value
+                    elif key not in self.user_data:  # Set default for missing fields
+                        self.user_data[key] = ''
+                
                 self.populate_form_fields()
             else:
-                messagebox.showwarning("Warning", "Student data not found in database.")
+                # For new users, create a basic student record with default values
+                print("No student data found, creating basic record for new user")
+                self.create_basic_student_record()
                 self.load_default_data()
             
             cursor.close()
             connection.close()
             
         except Error as e:
-            messagebox.showerror("Database Error", f"Failed to load user data: {e}")
+            print(f"Database Error loading user data: {e}")
+            # Don't show error message for new users, just load defaults
             self.load_default_data()
+
+    def create_basic_student_record(self):
+        """Create a basic student record for new users with default values"""
+        try:
+            connection = self.get_db_connection()
+            cursor = connection.cursor()
+            
+            # Get user_id from users table
+            cursor.execute("""
+                SELECT user_id FROM users WHERE email = %s
+            """, (self.user_data.get('email'),))
+            
+            user_result = cursor.fetchone()
+            if not user_result:
+                print("User not found in database")
+                return
+            
+            user_id = user_result[0]
+            
+            # Create basic student record with default values
+            cursor.execute("""
+                INSERT INTO students (user_id, student_number, first_name, last_name, middle_name,
+                                    course, year_level, enrollment_status, has_obligations)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                user_id = VALUES(user_id)
+            """, (
+                user_id,
+                self.user_data.get('student_number', ''),
+                self.user_data.get('first_name', ''),
+                self.user_data.get('last_name', ''),
+                self.user_data.get('middle_name', ''),
+                'Bachelor of Science in Information Technology',  # Default course
+                '1st Year',  # Default year level
+                'Enrolled',  # Default enrollment status
+                False  # Default no obligations
+            ))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print("✅ Created basic student record for new user")
+            
+        except Error as e:
+            print(f"Error creating basic student record: {e}")
 
     def load_default_data(self):
         """Load default data when database is not available"""
@@ -851,16 +910,18 @@ class ProfileWindow:
         # Clear any existing data first
         self.clear_fields()
         
-        # Student info - with comprehensive safety checks
+        # Student info - with comprehensive safety checks and default values
         try:
             if hasattr(self, 'entry_studentno') and self.entry_studentno:
-                self.entry_studentno.insert(0, self.user_data.get('student_number', ''))
+                student_no = self.user_data.get('student_number', '')
+                self.entry_studentno.insert(0, student_no)
         except Exception as e:
             print(f"Error populating student number: {e}")
         
         try:
             if hasattr(self, 'entry_email') and self.entry_email:
-                self.entry_email.insert(0, self.user_data.get('email', ''))
+                email = self.user_data.get('email', '')
+                self.entry_email.insert(0, email)
         except Exception as e:
             print(f"Error populating email: {e}")
         
@@ -887,11 +948,12 @@ class ProfileWindow:
         
         try:
             if hasattr(self, 'entry_address') and self.entry_address:
-                self.entry_address.insert(0, self.user_data.get('address', ''))
+                address = self.user_data.get('address', '')
+                self.entry_address.insert(0, address)
         except Exception as e:
             print(f"Error populating address: {e}")
         
-        # Date of birth - with comprehensive safety checks
+        # Date of birth - with comprehensive safety checks and default handling
         birth_date = self.user_data.get('birth_date')
         if birth_date:
             try:
@@ -940,36 +1002,44 @@ class ProfileWindow:
             except Exception as e:
                 print(f"Error processing birth date: {e}")
         
-        # Other fields - with comprehensive safety checks
+        # Other fields - with comprehensive safety checks and default values
         try:
             if hasattr(self, 'gender') and self.gender:
-                gender_value = self.user_data.get('gender', '')
+                gender_value = self.user_data.get('gender', 'Male')  # Default to Male
                 if gender_value:
                     self.gender.set(gender_value)
+                else:
+                    self.gender.set('Male')  # Set default
         except Exception as e:
             print(f"Error setting gender: {e}")
         
         try:
             if hasattr(self, 'course') and self.course:
-                course_value = self.user_data.get('course', '')
+                course_value = self.user_data.get('course', 'Bachelor of Science in Information Technology')
                 if course_value:
                     self.course.set(course_value)
+                else:
+                    self.course.set('Bachelor of Science in Information Technology')  # Set default
         except Exception as e:
             print(f"Error setting course: {e}")
         
         try:
             if hasattr(self, 'year_level') and self.year_level:
-                year_value = self.user_data.get('year_level', '')
+                year_value = self.user_data.get('year_level', '1st Year')
                 if year_value:
                     self.year_level.set(year_value)
+                else:
+                    self.year_level.set('1st Year')  # Set default
         except Exception as e:
             print(f"Error setting year level: {e}")
         
         try:
             if hasattr(self, 'enrollment_status') and self.enrollment_status:
-                status_value = self.user_data.get('enrollment_status', '')
+                status_value = self.user_data.get('enrollment_status', 'Enrolled')
                 if status_value:
                     self.enrollment_status.set(status_value)
+                else:
+                    self.enrollment_status.set('Enrolled')  # Set default
         except Exception as e:
             print(f"Error setting enrollment status: {e}")
         
@@ -1118,11 +1188,20 @@ class ProfileWindow:
 
     def update_name_display(self):
         """Update the name display on the profile with adaptive font size"""
-        display_name = self.format_display_name(
-            self.user_data.get('first_name', ''),
-            self.user_data.get('middle_name', ''),
-            self.user_data.get('last_name', '')
-        )
+        # Get name components with defaults
+        first_name = self.user_data.get('first_name', '')
+        middle_name = self.user_data.get('middle_name', '')
+        last_name = self.user_data.get('last_name', '')
+        
+        # If no name data exists, use student number as fallback
+        if not first_name and not last_name:
+            student_number = self.user_data.get('student_number', '')
+            if student_number:
+                display_name = f"Student {student_number}"
+            else:
+                display_name = "New Student"
+        else:
+            display_name = self.format_display_name(first_name, middle_name, last_name)
         
         # Calculate adaptive font size based on name length
         font_size = self.calculate_font_size(display_name)

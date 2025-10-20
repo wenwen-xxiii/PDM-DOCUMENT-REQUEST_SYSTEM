@@ -487,18 +487,35 @@ class HomeWindow:
         )
 
     def show_document_request(self):
-        """Show document request interface - OPTIMIZED FOR SPEED"""
+        """Show document request interface - ULTRA FAST WITH CACHING"""
         self.current_content = "document"
+        
+        # Check if document window already exists and just show it
+        if hasattr(self, 'document_window') and self.document_window:
+            try:
+                # Just show the existing window (instant)
+                self.document_window.main_frame.lift()
+                self.document_window.main_frame.tkraise()
+                # Optional: refresh data if needed (uncomment for always fresh data)
+                # self.document_window.refresh_if_needed()
+                return
+            except Exception as e:
+                print(f"Error showing cached document window: {e}")
+                # If cached window is corrupted, recreate it
+                if hasattr(self, 'document_window'):
+                    try:
+                        self.document_window.destroy()
+                    except:
+                        pass
+                    self.document_window = None
+        
+        # Clear current content
         self.clear_content()
 
-        print(f"🔍 DEBUG: Passing user_data to DocumentWindow: {self.user_data}")
+        print(f"🔍 DEBUG: Creating new DocumentWindow with user_data: {self.user_data}")
         
-        # Add student_id to user_data if not present
+        # Add student_id to user_data if not present (cached for speed)
         if 'student_id' not in self.user_data:
-            print(f"🔍 DEBUG: User ID in user_data: {self.user_data.get('user_id')}")
-            print(f"🔍 DEBUG: Student number in user_data: {self.user_data.get('student_number')}")
-            
-            # Try to get student_id from user_id
             user_id = self.user_data.get('user_id')
             if user_id:
                 try:
@@ -524,6 +541,7 @@ class HomeWindow:
             "logout": self.logout,
         }
 
+        # Create new document window
         self.document_window = DocumentWindow(
             parent=self.parent,
             user_data=self.user_data,
@@ -553,8 +571,27 @@ class HomeWindow:
         )
 
     def show_profile(self):
-        """Show profile interface - OPTIMIZED FOR SPEED"""
+        """Show profile interface - ULTRA FAST WITH CACHING"""
         self.current_content = "profile"
+        
+        # Check if profile window already exists and just show it
+        if hasattr(self, 'profile_window') and self.profile_window:
+            try:
+                # Just show the existing window (instant)
+                self.profile_window.main_frame.lift()
+                self.profile_window.main_frame.tkraise()
+                return
+            except Exception as e:
+                print(f"Error showing cached profile window: {e}")
+                # If cached window is corrupted, recreate it
+                if hasattr(self, 'profile_window'):
+                    try:
+                        self.profile_window.destroy()
+                    except:
+                        pass
+                    self.profile_window = None
+        
+        # Clear current content
         self.clear_content()
 
         navigation_callbacks = {
@@ -574,20 +611,27 @@ class HomeWindow:
         )
 
     def clear_content(self):
-        """Clear current content but keep navigation"""
+        """Clear current content but keep navigation - OPTIMIZED WITH CACHING"""
+        # Only hide windows, don't destroy them for instant switching
         if hasattr(self, "profile_window") and self.profile_window:
             try:
-                self.profile_window.destroy()
-            except:
-                pass
-            self.profile_window = None
+                self.profile_window.main_frame.lower()
+            except Exception as e:
+                print(f"Error hiding profile window: {e}")
+
+        if hasattr(self, "document_window") and self.document_window:
+            try:
+                self.document_window.main_frame.lower()
+            except Exception as e:
+                print(f"Error hiding document window: {e}")
 
         if hasattr(self, "programs_content_frame") and self.programs_content_frame:
             try:
-                self.programs_content_frame.destroy()
-            except:
-                pass
+                self.programs_content_frame.lower()
+            except Exception as e:
+                print(f"Error hiding programs content: {e}")
 
+        # Hide any other content frames but don't destroy them
         for widget in self.parent.winfo_children():
             if widget not in [
                 self.canvas,
@@ -598,11 +642,38 @@ class HomeWindow:
                 self.button_logout,
             ]:
                 try:
-                    widget.destroy()
+                    # Only hide, don't destroy for caching
+                    if hasattr(widget, 'lower'):
+                        widget.lower()
                 except:
                     pass
+
+    def clear_all_cached_windows(self):
+        """Clear all cached windows (used on logout)"""
+        if hasattr(self, "profile_window") and self.profile_window:
+            try:
+                self.profile_window.destroy()
+            except:
+                pass
+            self.profile_window = None
+
+        if hasattr(self, "document_window") and self.document_window:
+            try:
+                self.document_window.destroy()
+            except:
+                pass
+            self.document_window = None
+
+        if hasattr(self, "programs_content_frame") and self.programs_content_frame:
+            try:
+                self.programs_content_frame.destroy()
+            except:
+                pass
+            self.programs_content_frame = None
 
     def logout(self):
         """Logout user and return to login"""
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            # Clear all cached windows on logout
+            self.clear_all_cached_windows()
             self.logout_callback()
