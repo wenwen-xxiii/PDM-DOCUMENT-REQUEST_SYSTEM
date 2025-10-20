@@ -96,8 +96,8 @@ class DocumentRequestSystem:
         print(f"Resizing window to: {width}x{height}")  # Debug
         self.center_window(width, height)
 
-    async def setup_database_async(self):
-        """Initialize database connection asynchronously"""
+    def setup_database(self):
+        """Initialize database connection synchronously"""
         try:
             self.db_connection = mysql.connector.connect(**DB_CONFIG)
             if self.db_connection.is_connected():
@@ -115,7 +115,7 @@ class DocumentRequestSystem:
                             "Database not found. Would you like to initialize the database now?"
                         )
                         if response:
-                            await self.initialize_database_async()
+                            self.initialize_database()
                         else:
                             messagebox.showinfo(
                                 "Information",
@@ -133,50 +133,8 @@ class DocumentRequestSystem:
             messagebox.showerror("Database Error", error_msg)
             self.root.quit()
 
-    def setup_database(self):
-        """Synchronous wrapper for async database setup"""
-        try:
-            asyncio.run(self.setup_database_async())
-        except Exception as e:
-            print(f"Error in database setup: {e}")
-            # Fallback to original implementation
-            try:
-                self.db_connection = mysql.connector.connect(**DB_CONFIG)
-                if self.db_connection.is_connected():
-                    print("✓ Database connection established successfully")
-
-                    # Test if database exists
-                    try:
-                        cursor = self.db_connection.cursor()
-                        cursor.execute("USE {}".format(DB_CONFIG['database']))
-                        cursor.close()
-                    except Error as e:
-                        if e.errno == 1049:  # Database doesn't exist
-                            response = messagebox.askyesno(
-                                "Database Setup",
-                                "Database not found. Would you like to initialize the database now?"
-                            )
-                            if response:
-                                self.initialize_database()
-                            else:
-                                messagebox.showinfo(
-                                    "Information",
-                                    "Please run init_database.py manually to set up the database."
-                                )
-                                self.root.quit()
-                        else:
-                            raise e
-
-            except Error as e:
-                error_msg = f"Failed to connect to database: {str(e)}"
-                if APP_CONFIG['debug']:
-                    error_msg += f"\n\nDebug info: {e}"
-
-                messagebox.showerror("Database Error", error_msg)
-                self.root.quit()
-
-    async def initialize_database_async(self):
-        """Initialize the database schema asynchronously"""
+    def initialize_database(self):
+        """Initialize the database schema synchronously"""
         try:
             from init_database import initialize_system_database
             if initialize_system_database():
@@ -195,33 +153,9 @@ class DocumentRequestSystem:
             messagebox.showerror("Error", f"Database initialization failed: {e}")
             self.root.quit()
 
-    def initialize_database(self):
-        """Synchronous wrapper for async database initialization"""
-        try:
-            asyncio.run(self.initialize_database_async())
-        except Exception as e:
-            print(f"Error in database initialization: {e}")
-            # Fallback to original implementation
-            try:
-                from init_database import initialize_system_database
-                if initialize_system_database():
-                    messagebox.showinfo("Success", "Database initialized successfully!")
-                    # Reconnect to the new database
-                    if self.db_connection and self.db_connection.is_connected():
-                        self.db_connection.close()
-                    self.db_connection = mysql.connector.connect(**DB_CONFIG)
-                else:
-                    messagebox.showerror("Error", "Failed to initialize database.")
-                    self.root.quit()
-            except ImportError as e:
-                messagebox.showerror("Error", f"Cannot import database initializer: {e}")
-                self.root.quit()
-            except Exception as e:
-                messagebox.showerror("Error", f"Database initialization failed: {e}")
-                self.root.quit()
 
-    async def get_async_db_connection_with_reconnect(self):
-        """Get async database connection with reconnection handling"""
+    def get_db_connection(self):
+        """Synchronous database connection"""
         try:
             if self.db_connection is None or not self.db_connection.is_connected():
                 self.db_connection = mysql.connector.connect(**DB_CONFIG)
@@ -235,27 +169,6 @@ class DocumentRequestSystem:
 
             messagebox.showerror("Database Error", error_msg)
             return None
-
-    def get_db_connection(self):
-        """Synchronous wrapper for async database connection"""
-        try:
-            return asyncio.run(self.get_async_db_connection_with_reconnect())
-        except Exception as e:
-            print(f"Error in database connection: {e}")
-            # Fallback to original implementation
-            try:
-                if self.db_connection is None or not self.db_connection.is_connected():
-                    self.db_connection = mysql.connector.connect(**DB_CONFIG)
-                    # Set autocommit to True to avoid transaction conflicts
-                    self.db_connection.autocommit = True
-                return self.db_connection
-            except Error as e:
-                error_msg = f"Database connection failed: {str(e)}"
-                if APP_CONFIG['debug']:
-                    error_msg += f"\n\nDebug info: {e}"
-
-                messagebox.showerror("Database Error", error_msg)
-                return None
 
     def show_login(self):
         """Show login window and resize to login size"""

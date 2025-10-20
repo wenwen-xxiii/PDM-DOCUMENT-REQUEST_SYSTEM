@@ -25,6 +25,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 from utils import EmailService
 
 OUTPUT_PATH = Path(__file__).parent
@@ -257,13 +258,13 @@ class AdminFeedbackManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_feedbacks_async())
+                    future = executor.submit(safe_async_run, self.load_feedbacks_async)
                     return future.result()
             else:
                 return loop.run_until_complete(self.load_feedbacks_async())
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.load_feedbacks_async())
+            return safe_async_run(self.load_feedbacks_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -1016,13 +1017,13 @@ class AdminFeedbackManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.submit_feedback_response_async(feedback_id, response_content))
+                    future = executor.submit(safe_async_run, self.submit_feedback_response_async, feedback_id, response_content)
                     return future.result()
             else:
                 return loop.run_until_complete(self.submit_feedback_response_async(feedback_id, response_content))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.submit_feedback_response_async(feedback_id, response_content))
+            return safe_async_run(self.submit_feedback_response_async, feedback_id, response_content)
 
     async def send_feedback_response_email_async(self, feedback_data, response_content, staff_name):
         """Send feedback response email to student (async version)"""
@@ -1117,13 +1118,13 @@ class AdminFeedbackManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
+                    future = executor.submit(safe_async_run, self.send_feedback_response_email_async, feedback_data, response_content, staff_name)
                     return future.result()
             else:
                 return loop.run_until_complete(self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.send_feedback_response_email_async(feedback_data, response_content, staff_name))
+            return safe_async_run(self.send_feedback_response_email_async, feedback_data, response_content, staff_name)
 
     def _fallback_feedback_email(
         self, student_email, subject, response_content, feedback_data

@@ -14,6 +14,7 @@ import concurrent.futures
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -114,7 +115,7 @@ class AdminBillingManager:
         """Create a title label in the top left"""
         self.title_label = Label(
             self.parent,
-            text="Billing Management",
+            text="Payment Management",
             font=("Inter", 18, "bold"),
             bg="#FFFFFF",
             fg="#792D1B"
@@ -241,20 +242,20 @@ class AdminBillingManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_payments_async())
+                    future = executor.submit(safe_async_run, self.load_payments_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_payments: {e}")
-                return asyncio.run(self.load_payments_async())
+                return safe_async_run(self.load_payments_async)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_payments_async())
+                    future = executor.submit(safe_async_run, self.load_payments_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_payments: {e}")
-                return asyncio.run(self.load_payments_async())
+                return safe_async_run(self.load_payments_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -584,20 +585,20 @@ class AdminBillingManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.approve_payment_async(payment))
+                            future = executor.submit(safe_async_run, self.approve_payment_async, payment)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async approve_payment: {e}")
-                        return asyncio.run(self.approve_payment_async(payment))
+                        return safe_async_run(self.approve_payment_async, payment)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.approve_payment_async(payment))
+                            future = executor.submit(safe_async_run, self.approve_payment_async, payment)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async approve_payment: {e}")
-                        return asyncio.run(self.approve_payment_async(payment))
+                        return safe_async_run(self.approve_payment_async, payment)
             
             approve_thread_obj = threading.Thread(target=approve_thread, daemon=True)
             approve_thread_obj.start()
@@ -660,20 +661,20 @@ class AdminBillingManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.refund_payment_async(payment))
+                            future = executor.submit(safe_async_run, self.refund_payment_async, payment)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async refund_payment: {e}")
-                        return asyncio.run(self.refund_payment_async(payment))
+                        return safe_async_run(self.refund_payment_async, payment)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.refund_payment_async(payment))
+                            future = executor.submit(safe_async_run, self.refund_payment_async, payment)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async refund_payment: {e}")
-                        return asyncio.run(self.refund_payment_async(payment))
+                        return safe_async_run(self.refund_payment_async, payment)
             
             refund_thread_obj = threading.Thread(target=refund_thread, daemon=True)
             refund_thread_obj.start()
@@ -722,20 +723,20 @@ class AdminBillingManager:
                 # No event loop running, create a new one
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_payments_async())
+                        future = executor.submit(safe_async_run, self.load_payments_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_payments: {e}")
-                    result = asyncio.run(self.load_payments_async())
+                    result = safe_async_run(self.load_payments_async)
             else:
                 # Event loop exists, run in thread pool
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_payments_async())
+                        future = executor.submit(safe_async_run, self.load_payments_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_payments: {e}")
-                    result = asyncio.run(self.load_payments_async())
+                    result = safe_async_run(self.load_payments_async)
             
             # Schedule UI update on main thread
             self.parent.after(0, self._update_ui_after_refresh)

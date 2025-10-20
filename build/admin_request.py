@@ -14,6 +14,7 @@ import base64
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 from utils import email_service
 from admin_upload_docu import AdminUploadDocumentWindow
 from view_docu_attachment import DocumentAttachmentViewer
@@ -256,13 +257,13 @@ class AdminRequestManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_document_requests_async())
+                    future = executor.submit(safe_async_run, self.load_document_requests_async)
                     return future.result()
             else:
                 return loop.run_until_complete(self.load_document_requests_async())
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.load_document_requests_async())
+            return safe_async_run(self.load_document_requests_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -567,13 +568,13 @@ class AdminRequestManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_email_notification_async(student_email, subject, body, attachments))
+                    future = executor.submit(safe_async_run, self.send_email_notification_async, student_email, subject, body, attachments)
                     return future.result()
             else:
                 return loop.run_until_complete(self.send_email_notification_async(student_email, subject, body, attachments))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.send_email_notification_async(student_email, subject, body, attachments))
+            return safe_async_run(self.send_email_notification_async, student_email, subject, body, attachments)
     
     def _fallback_email_notification(self, student_email, subject, body, attachments=None):
         """Fallback email notification method"""
@@ -896,13 +897,13 @@ class AdminRequestManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_document_ready_email_async(request))
+                    future = executor.submit(safe_async_run, self.send_document_ready_email_async, request)
                     return future.result()
             else:
                 return loop.run_until_complete(self.send_document_ready_email_async(request))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.send_document_ready_email_async(request))
+            return safe_async_run(self.send_document_ready_email_async, request)
 
     def view_request(self, request):
         """View request details and attachments"""
@@ -1283,13 +1284,13 @@ class AdminRequestManager:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
+                    future = executor.submit(safe_async_run, self._update_request_status_in_db_async, request_id, status, payment_status, processed_date, ready_date, completed_date)
                     return future.result()
             else:
                 return loop.run_until_complete(self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
+                return safe_async_run(self._update_request_status_in_db_async, request_id, status, payment_status, processed_date, ready_date, completed_date)
 
     def approve_payment(self, request):
         """Approve payment and set status to processing"""

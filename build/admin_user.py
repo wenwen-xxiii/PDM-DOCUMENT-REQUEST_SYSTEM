@@ -15,6 +15,7 @@ import concurrent.futures
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -40,7 +41,7 @@ class AdminUserManager:
         self.filtered_users = []
         self.search_query = ""
         self.current_page = 1
-        self.users_per_page = 10
+        self.users_per_page = 8
         
         # UI element storage
         self.images = []
@@ -78,6 +79,9 @@ class AdminUserManager:
         
         # Create title label (top left)
         self.create_title_label()
+        
+        # Create add user button (under search bar)
+        self.create_add_user_button()
         
         # Create table header
         self.create_table_headers()
@@ -122,6 +126,21 @@ class AdminUserManager:
         )
         self.title_label.place(x=20, y=15)
 
+    def create_add_user_button(self):
+        """Create add new user button under the search bar"""
+        self.button_add_user = Button(
+            self.parent,
+            text="Add New User",
+            font=("Inter", 12, "bold"),
+            bg="#28a745",
+            fg="#FFFFFF",
+            relief="flat",
+            cursor="hand2",
+            command=self.add_new_user
+        )
+        # Position under the search bar with some spacing
+        self.button_add_user.place(x=750, y=60, width=120, height=35)
+
     def create_table_headers(self):
         """Create table header labels for users"""
         headers = [
@@ -134,11 +153,11 @@ class AdminUserManager:
         ]
         
         # Header background - dark brown like in the image
-        self.canvas.create_rectangle(20, 60, 875, 100, fill="#792D1B", outline="")
+        self.canvas.create_rectangle(20, 110, 875, 150, fill="#792D1B", outline="")
         
         for x, text, anchor in headers:
             self.canvas.create_text(
-                x, 80, 
+                x, 130, 
                 anchor=anchor, 
                 text=text, 
                 fill="#FFFFFF", 
@@ -230,20 +249,20 @@ class AdminUserManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_users_async())
+                    future = executor.submit(safe_async_run, self.load_users_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_users: {e}")
-                return asyncio.run(self.load_users_async())
+                return safe_async_run(self.load_users_async)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_users_async())
+                    future = executor.submit(safe_async_run, self.load_users_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_users: {e}")
-                return asyncio.run(self.load_users_async())
+                return safe_async_run(self.load_users_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -311,7 +330,7 @@ class AdminUserManager:
 
     def create_table_row(self, row_index, user):
         """Create a table row with data and action buttons"""
-        y_position = 110 + (row_index * 45)
+        y_position = 160 + (row_index * 45)
         
         # Row background (alternating colors)
         fill_color = "#FFFFFF" if row_index % 2 == 0 else "#F8F8F8"
@@ -677,20 +696,20 @@ class AdminUserManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                            future = executor.submit(safe_async_run, self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_user: {e}")
-                        result = asyncio.run(self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                        result = safe_async_run(self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                            future = executor.submit(safe_async_run, self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_user: {e}")
-                        result = asyncio.run(self.update_user_async(user['user_id'], email, user_type, is_verified, new_password if update_password else None))
+                        result = safe_async_run(self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
                 
                 # Schedule UI update on main thread
                 self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
@@ -765,20 +784,20 @@ class AdminUserManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                    future = executor.submit(safe_async_run, self.update_user_async, user_id, email, user_type, is_verified, new_password)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_user: {e}")
-                return asyncio.run(self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                return safe_async_run(self.update_user_async, user_id, email, user_type, is_verified, new_password)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                    future = executor.submit(safe_async_run, self.update_user_async, user_id, email, user_type, is_verified, new_password)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_user: {e}")
-                return asyncio.run(self.update_user_async(user_id, email, user_type, is_verified, new_password))
+                return safe_async_run(self.update_user_async, user_id, email, user_type, is_verified, new_password)
 
     async def toggle_user_status_async(self, user, new_status):
         """Change user active status (async version)"""
@@ -828,20 +847,20 @@ class AdminUserManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.toggle_user_status_async(user, new_status))
+                            future = executor.submit(safe_async_run, self.toggle_user_status_async, user, new_status)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async toggle_user_status: {e}")
-                        return asyncio.run(self.toggle_user_status_async(user, new_status))
+                        return safe_async_run(self.toggle_user_status_async, user, new_status)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.toggle_user_status_async(user, new_status))
+                            future = executor.submit(safe_async_run, self.toggle_user_status_async, user, new_status)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async toggle_user_status: {e}")
-                        return asyncio.run(self.toggle_user_status_async(user, new_status))
+                        return safe_async_run(self.toggle_user_status_async, user, new_status)
             
             toggle_status_thread_obj = threading.Thread(target=toggle_status_thread, daemon=True)
             toggle_status_thread_obj.start()
@@ -890,20 +909,20 @@ class AdminUserManager:
                 # No event loop running, create a new one
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_users_async())
+                        future = executor.submit(safe_async_run, self.load_users_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_users: {e}")
-                    result = asyncio.run(self.load_users_async())
+                    result = safe_async_run(self.load_users_async)
             else:
                 # Event loop exists, run in thread pool
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_users_async())
+                        future = executor.submit(safe_async_run, self.load_users_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_users: {e}")
-                    result = asyncio.run(self.load_users_async())
+                    result = safe_async_run(self.load_users_async)
             
             # Schedule UI update on main thread
             self.parent.after(0, self._update_ui_after_refresh)
@@ -940,3 +959,224 @@ class AdminUserManager:
         if self.loading_label:
             self.loading_label.destroy()
             self.loading_label = None
+
+    def add_new_user(self):
+        """Open add new user dialog"""
+        dialog = Toplevel(self.parent)
+        dialog.title("Add New User")
+        dialog.geometry("500x700")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#FCECB7")
+        
+        # Center the dialog on screen
+        dialog.transient(self.parent)
+        dialog.grab_set()
+        
+        # Center the window on screen
+        dialog.update_idletasks()
+        width, height = 500, 700
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Force focus and ensure proper display
+        dialog.focus_force()
+        dialog.lift()
+        
+        # Create canvas for centered layout
+        canvas = Canvas(
+            dialog,
+            bg="#FCECB7",
+            height=700,
+            width=500,
+            bd=0,
+            highlightthickness=0,
+            relief="ridge"
+        )
+        canvas.place(x=0, y=0)
+        
+        # Header section
+        canvas.create_rectangle(0.0, 0.0, 500.0, 80.0, fill="#792D1B", outline="")
+        canvas.create_rectangle(0.0, 50.0, 500.0, 80.0, fill="#FFDA0C", outline="")
+        
+        # Header text
+        canvas.create_text(
+            250.0, 65.0,
+            text="Add New User",
+            fill="#000000",
+            font=("Inter", 16, "bold"),
+            anchor="center"
+        )
+        
+        # White background panel
+        canvas.create_rectangle(
+            25.0, 100.0, 475.0, 650.0,
+            fill="#FFFFFF", outline="#DDDDDD", width=2
+        )
+        
+        # Form fields - centered layout
+        center_x = 250.0  # Center of the dialog
+        field_y_start = 130
+        field_spacing = 70
+        
+        # Username field
+        canvas.create_text(
+            center_x, field_y_start,
+            text="Username:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        username_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        username_entry.place(x=150, y=field_y_start + 20, width=200, height=30)
+        
+        # Email field
+        canvas.create_text(
+            center_x, field_y_start + field_spacing,
+            text="Email:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        email_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        email_entry.place(x=150, y=field_y_start + field_spacing + 20, width=200, height=30)
+        
+        # User Type field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 2),
+            text="User Type:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        user_type_var = StringVar()
+        user_type_combo = ttk.Combobox(dialog, textvariable=user_type_var, width=27, state="readonly")
+        user_type_combo['values'] = ('student', 'admin', 'registrar')
+        user_type_combo.place(x=150, y=field_y_start + (field_spacing * 2) + 20, width=200, height=30)
+        user_type_var.set('student')  # Default to student
+        
+        # Password field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 3),
+            text="Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        password_entry = Entry(dialog, font=("Inter", 10), width=30, show="*", justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        password_entry.place(x=150, y=field_y_start + (field_spacing * 3) + 20, width=200, height=30)
+        
+        # Confirm Password field
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 4),
+            text="Confirm Password:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        confirm_password_entry = Entry(dialog, font=("Inter", 10), width=30, show="*", justify="center", bg="#FFFFFF", relief="solid", bd=1)
+        confirm_password_entry.place(x=150, y=field_y_start + (field_spacing * 4) + 20, width=200, height=30)
+        
+        # Email Verified checkbox
+        canvas.create_text(
+            center_x, field_y_start + (field_spacing * 5),
+            text="Email Verified:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
+        )
+        verified_var = BooleanVar(value=False)
+        verified_check = Checkbutton(
+            dialog, 
+            variable=verified_var, 
+            font=("Inter", 10), 
+            bg="#FFFFFF",
+            onvalue=True,
+            offvalue=False
+        )
+        verified_check.place(x=center_x - 10, y=field_y_start + (field_spacing * 5) + 20, width=20, height=20)
+        
+        # Buttons
+        def save_new_user():
+            username = username_entry.get().strip()
+            email = email_entry.get().strip()
+            user_type = user_type_var.get()
+            password = password_entry.get().strip()
+            confirm_password = confirm_password_entry.get().strip()
+            is_verified = verified_var.get()
+            
+            # Validation
+            if not username:
+                messagebox.showerror("Error", "Username is required")
+                return
+            if not email:
+                messagebox.showerror("Error", "Email is required")
+                return
+            if not password:
+                messagebox.showerror("Error", "Password is required")
+                return
+            if len(password) < 6:
+                messagebox.showerror("Error", "Password must be at least 6 characters long")
+                return
+            if password != confirm_password:
+                messagebox.showerror("Error", "Passwords do not match")
+                return
+            
+            # Show loading indicator
+            self.show_loading_indicator("Creating user...")
+            
+            # Use threading to avoid blocking UI
+            def create_thread():
+                try:
+                    result = self.create_user_async(username, email, user_type, password, is_verified)
+                    # Schedule UI update on main thread
+                    self.parent.after(0, lambda: self._update_ui_after_create(result, dialog))
+                except Exception as e:
+                    print(f"❌ Error creating user: {e}")
+                    self.parent.after(0, lambda: self._update_ui_after_create(False, dialog))
+            
+            create_thread_obj = threading.Thread(target=create_thread, daemon=True)
+            create_thread_obj.start()
+        
+        def cancel_form():
+            dialog.destroy()
+        
+        # Save and Cancel buttons
+        Button(dialog, text="Create User", font=("Inter", 12, "bold"), bg="#28a745", fg="#FFFFFF", 
+               relief="flat", command=save_new_user).place(x=140, y=600, width=120, height=35)
+        Button(dialog, text="Cancel", font=("Inter", 12, "bold"), bg="#6c757d", fg="#FFFFFF", 
+               relief="flat", command=cancel_form).place(x=280, y=600, width=100, height=35)
+    
+    def create_user_async(self, username, email, user_type, password, is_verified):
+        """Create new user in database"""
+        try:
+            connection = self.get_db_connection()
+            if not connection:
+                return False
+                
+            cursor = connection.cursor()
+            
+            # Import hashlib for password hashing
+            import hashlib
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+            
+            # Check if username or email already exists
+            cursor.execute("SELECT COUNT(*) FROM users WHERE username = %s OR email = %s", (username, email))
+            if cursor.fetchone()[0] > 0:
+                messagebox.showerror("Error", "Username or email already exists")
+                return False
+            
+            cursor.execute("""
+                INSERT INTO users (username, email, user_type, password_hash, is_active, is_verified, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """, (username, email, user_type, hashed_password, True, is_verified))
+            
+            connection.commit()
+            cursor.close()
+            connection.close()
+            
+            print(f"✅ Created new user: {username}")
+            return True
+            
+        except Error as e:
+            print(f"❌ Error creating user: {e}")
+            messagebox.showerror("Database Error", f"Failed to create user: {str(e)}")
+            return False
+    
+    def _update_ui_after_create(self, success, dialog):
+        """Update UI after create operation completes"""
+        try:
+            self.hide_loading_indicator()
+            if success:
+                dialog.destroy()
+                self.load_users()
+                self.update_display()
+                messagebox.showinfo("Success", "User created successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to create user")
+        except Exception as e:
+            print(f"❌ Error during UI update after create: {e}")

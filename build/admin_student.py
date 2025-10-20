@@ -14,6 +14,7 @@ import concurrent.futures
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -270,20 +271,20 @@ class AdminStudentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_students_async())
+                    future = executor.submit(safe_async_run, self.load_students_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_students: {e}")
-                return asyncio.run(self.load_students_async())
+                return safe_async_run(self.load_students_async)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_students_async())
+                    future = executor.submit(safe_async_run, self.load_students_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_students: {e}")
-                return asyncio.run(self.load_students_async())
+                return safe_async_run(self.load_students_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -987,31 +988,31 @@ class AdminStudentManager:
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             if student:
-                                future = executor.submit(asyncio.run, self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                                future = executor.submit(safe_async_run, self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
                             else:
-                                future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                                future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_student: {e}")
                         if student:
-                            result = asyncio.run(self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                            result = safe_async_run(self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
                         else:
-                            result = asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                            result = safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             if student:
-                                future = executor.submit(asyncio.run, self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                                future = executor.submit(safe_async_run, self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
                             else:
-                                future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                                future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_student: {e}")
                         if student:
-                            result = asyncio.run(self.update_student_async(student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address))
+                            result = safe_async_run(self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
                         else:
-                            result = asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                            result = safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                 
                 # Schedule UI update on main thread
                 self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
@@ -1184,20 +1185,20 @@ class AdminStudentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                    future = executor.submit(safe_async_run, self.update_student_async, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_student: {e}")
-                return asyncio.run(self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                return safe_async_run(self.update_student_async, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                    future = executor.submit(safe_async_run, self.update_student_async, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_student: {e}")
-                return asyncio.run(self.update_student_async(student_id, first_name, last_name, middle_name, course, year_level, contact_number, address))
+                return safe_async_run(self.update_student_async, student_id, first_name, last_name, middle_name, course, year_level, contact_number, address)
 
     async def add_new_student_async(self, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email):
         """Add new student to database (async version)"""
@@ -1244,20 +1245,20 @@ class AdminStudentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                    future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async add_new_student: {e}")
-                return asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                return safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                    future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async add_new_student: {e}")
-                return asyncio.run(self.add_new_student_async(student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email))
+                return safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
 
     async def change_enrollment_status_async(self, student, new_status):
         """Change student enrollment status (async version)"""
@@ -1307,20 +1308,20 @@ class AdminStudentManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.change_enrollment_status_async(student, new_status))
+                            future = executor.submit(safe_async_run, self.change_enrollment_status_async, student, new_status)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async change_enrollment_status: {e}")
-                        return asyncio.run(self.change_enrollment_status_async(student, new_status))
+                        return safe_async_run(self.change_enrollment_status_async, student, new_status)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.change_enrollment_status_async(student, new_status))
+                            future = executor.submit(safe_async_run, self.change_enrollment_status_async, student, new_status)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async change_enrollment_status: {e}")
-                        return asyncio.run(self.change_enrollment_status_async(student, new_status))
+                        return safe_async_run(self.change_enrollment_status_async, student, new_status)
             
             change_status_thread_obj = threading.Thread(target=change_status_thread, daemon=True)
             change_status_thread_obj.start()
@@ -1369,20 +1370,20 @@ class AdminStudentManager:
                 # No event loop running, create a new one
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_students_async())
+                        future = executor.submit(safe_async_run, self.load_students_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_students: {e}")
-                    result = asyncio.run(self.load_students_async())
+                    result = safe_async_run(self.load_students_async)
             else:
                 # Event loop exists, run in thread pool
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_students_async())
+                        future = executor.submit(safe_async_run, self.load_students_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_students: {e}")
-                    result = asyncio.run(self.load_students_async())
+                    result = safe_async_run(self.load_students_async)
             
             # Schedule UI update on main thread
             self.parent.after(0, self._update_ui_after_refresh)

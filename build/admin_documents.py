@@ -14,6 +14,7 @@ import concurrent.futures
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -251,20 +252,20 @@ class AdminDocumentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    future = executor.submit(safe_async_run, self.load_document_types_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_document_types: {e}")
-                return asyncio.run(self.load_document_types_async())
+                return safe_async_run(self.load_document_types_async)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    future = executor.submit(safe_async_run, self.load_document_types_async)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async load_document_types: {e}")
-                return asyncio.run(self.load_document_types_async())
+                return safe_async_run(self.load_document_types_async)
 
     def update_display(self):
         """Update the display with current page data"""
@@ -588,31 +589,31 @@ class AdminDocumentManager:
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             if document:
-                                future = executor.submit(asyncio.run, self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                                future = executor.submit(safe_async_run, self.update_document_type_async, document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                             else:
-                                future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                                future = executor.submit(safe_async_run, self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_document: {e}")
                         if document:
-                            result = asyncio.run(self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = safe_async_run(self.update_document_type_async, document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                         else:
-                            result = asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = safe_async_run(self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             if document:
-                                future = executor.submit(asyncio.run, self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                                future = executor.submit(safe_async_run, self.update_document_type_async, document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                             else:
-                                future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                                future = executor.submit(safe_async_run, self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                             result = future.result()
                     except Exception as e:
                         print(f"❌ Error in async save_document: {e}")
                         if document:
-                            result = asyncio.run(self.update_document_type_async(document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = safe_async_run(self.update_document_type_async, document['document_type_id'], code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                         else:
-                            result = asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                            result = safe_async_run(self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                 
                 # Schedule UI update on main thread
                 self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
@@ -675,20 +676,20 @@ class AdminDocumentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    future = executor.submit(safe_async_run, self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async add_new_document_type: {e}")
-                return asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                return safe_async_run(self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    future = executor.submit(safe_async_run, self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async add_new_document_type: {e}")
-                return asyncio.run(self.add_new_document_type_async(code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                return safe_async_run(self.add_new_document_type_async, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
 
     async def update_document_type_async(self, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance):
         """Update existing document type in database (async version)"""
@@ -724,20 +725,20 @@ class AdminDocumentManager:
             # No event loop running, create a new one
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    future = executor.submit(safe_async_run, self.update_document_type_async, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_document_type: {e}")
-                return asyncio.run(self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                return safe_async_run(self.update_document_type_async, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
         else:
             # Event loop exists, run in thread pool
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                    future = executor.submit(safe_async_run, self.update_document_type_async, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
                     return future.result()
             except Exception as e:
                 print(f"❌ Error in async update_document_type: {e}")
-                return asyncio.run(self.update_document_type_async(document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance))
+                return safe_async_run(self.update_document_type_async, document_id, code, name, fee_amount, processing_days, description, is_available, requires_clearance)
 
     async def toggle_document_status_async(self, document):
         """Toggle document type active status (async version)"""
@@ -788,20 +789,20 @@ class AdminDocumentManager:
                     # No event loop running, create a new one
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.toggle_document_status_async(document))
+                            future = executor.submit(safe_async_run, self.toggle_document_status_async, document)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async toggle_document_status: {e}")
-                        return asyncio.run(self.toggle_document_status_async(document))
+                        return safe_async_run(self.toggle_document_status_async, document)
                 else:
                     # Event loop exists, run in thread pool
                     try:
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(asyncio.run, self.toggle_document_status_async(document))
+                            future = executor.submit(safe_async_run, self.toggle_document_status_async, document)
                             return future.result()
                     except Exception as e:
                         print(f"❌ Error in async toggle_document_status: {e}")
-                        return asyncio.run(self.toggle_document_status_async(document))
+                        return safe_async_run(self.toggle_document_status_async, document)
             
             toggle_thread_obj = threading.Thread(target=toggle_thread, daemon=True)
             toggle_thread_obj.start()
@@ -850,20 +851,20 @@ class AdminDocumentManager:
                 # No event loop running, create a new one
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_document_types_async())
+                        future = executor.submit(safe_async_run, self.load_document_types_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_documents: {e}")
-                    result = asyncio.run(self.load_document_types_async())
+                    result = safe_async_run(self.load_document_types_async)
             else:
                 # Event loop exists, run in thread pool
                 try:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.load_document_types_async())
+                        future = executor.submit(safe_async_run, self.load_document_types_async)
                         result = future.result()
                 except Exception as e:
                     print(f"❌ Error in async refresh_documents: {e}")
-                    result = asyncio.run(self.load_document_types_async())
+                    result = safe_async_run(self.load_document_types_async)
             
             # Schedule UI update on main thread
             self.parent.after(0, self._update_ui_after_refresh)

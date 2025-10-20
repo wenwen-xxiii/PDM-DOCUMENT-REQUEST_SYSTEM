@@ -14,6 +14,7 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import DB_CONFIG
+from async_utils import safe_async_run
 from utils import email_service
 
 OUTPUT_PATH = Path(__file__).parent
@@ -228,13 +229,13 @@ class AdminUploadDocumentWindow:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_document_types_async())
+                    future = executor.submit(safe_async_run, self.load_document_types_async)
                     return future.result()
             else:
                 return loop.run_until_complete(self.load_document_types_async())
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.load_document_types_async())
+            return safe_async_run(self.load_document_types_async)
 
     def populate_form(self):
         """Populate form with request data if available"""
@@ -421,13 +422,13 @@ class AdminUploadDocumentWindow:
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
+                    future = executor.submit(safe_async_run, self.send_document_email_async, student_email, subject, body, attachment_path, request_id)
                     return future.result()
             else:
                 return loop.run_until_complete(self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.send_document_email_async(student_email, subject, body, attachment_path, request_id))
+            return safe_async_run(self.send_document_email_async, student_email, subject, body, attachment_path, request_id)
 
     def get_file_type(self, filename):
         """Determine file type based on extension"""
@@ -484,13 +485,13 @@ PDM Registrar's Office
                 # If we're already in an async context, run in thread
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_fallback_notification_async(student_email, subject, body, attachment_name))
+                    future = executor.submit(safe_async_run, self.send_fallback_notification_async, student_email, subject, body, attachment_name)
                     return future.result()
             else:
                 return loop.run_until_complete(self.send_fallback_notification_async(student_email, subject, body, attachment_name))
         except RuntimeError:
             # No event loop running, create a new one
-            return asyncio.run(self.send_fallback_notification_async(student_email, subject, body, attachment_name))
+            return safe_async_run(self.send_fallback_notification_async, student_email, subject, body, attachment_name)
 
     def _print_fallback_notification(self, student_email, subject, body, attachment_name):
         """Print notification as last resort when all email methods fail"""
@@ -671,13 +672,13 @@ Document uploaded successfully!
                     # If we're already in an async context, run in thread
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.submit_document_async())
+                        future = executor.submit(safe_async_run, self.submit_document_async)
                         return future.result()
                 else:
                     return loop.run_until_complete(self.submit_document_async())
             except RuntimeError:
                 # No event loop running, create a new one
-                return asyncio.run(self.submit_document_async())
+                return safe_async_run(self.submit_document_async)
         
         # Run submit in background thread
         submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)
