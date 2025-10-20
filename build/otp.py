@@ -3,6 +3,9 @@ from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import time
 import sys
 import os
+import asyncio
+from config import DB_CONFIG
+import aiomysql
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -37,6 +40,21 @@ class OTPVerificationWindow:
         
         self.setup_ui()
         self.start_otp_timer()
+    
+    async def get_async_db_connection(self):
+        """Get async database connection"""
+        try:
+            connection = await aiomysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                db=DB_CONFIG['database'],
+                port=DB_CONFIG['port']
+            )
+            return connection
+        except Exception as e:
+            print(f"Async database connection failed: {e}")
+            return None
         
     def setup_ui(self):
         self.canvas = Canvas(
@@ -286,8 +304,8 @@ class OTPVerificationWindow:
         """Get the complete OTP from all entry fields"""
         return ''.join(entry.get() for entry in self.otp_entries)
 
-    def verify_otp(self):
-        """Verify the entered OTP"""
+    async def verify_otp_async(self):
+        """Verify the entered OTP asynchronously"""
         entered_otp = self.get_entered_otp()
         
         if time.time() > self.otp_expiry_time:
@@ -304,6 +322,23 @@ class OTPVerificationWindow:
             return
         
         if entered_otp == self.otp_code:
+            # Store OTP verification in database if needed
+            db_connection = await self.get_async_db_connection()
+            if db_connection:
+                try:
+                    cursor = await db_connection.cursor()
+                    # Update user verification status or log OTP verification
+                    await cursor.execute(
+                        "UPDATE users SET email_verified = 1 WHERE email = %s",
+                        (self.user_data['email'],)
+                    )
+                    await db_connection.commit()
+                except Exception as e:
+                    print(f"Database update error: {e}")
+                finally:
+                    if db_connection:
+                        await db_connection.ensure_closed()
+            
             messagebox.showinfo("Success", "OTP verified successfully!")
             self.verification_callback()
         else:
@@ -314,8 +349,16 @@ class OTPVerificationWindow:
             if self.otp_entries:
                 self.otp_entries[0].focus()
 
-    def resend_otp(self):
-        """Resend OTP code"""
+    def verify_otp(self):
+        """Synchronous wrapper for async OTP verification"""
+        try:
+            # Run the async function in a new event loop
+            asyncio.run(self.verify_otp_async())
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to verify OTP: {str(e)}")
+
+    async def resend_otp_async(self):
+        """Resend OTP code asynchronously"""
         from utils import UtilityFunctions, EmailService
         
         self.otp_code = UtilityFunctions.generate_otp()
@@ -325,18 +368,30 @@ class OTPVerificationWindow:
         for entry in self.otp_entries:
             entry.delete(0, 'end')
         
-        # Resend email
+        # Resend email using async email service
         email_service = EmailService()
-        if email_service.send_otp_email_sync(self.user_data['email'], self.otp_code):
-            messagebox.showinfo("Success", "New OTP sent to your email!")
-            if self.otp_entries:
-                self.otp_entries[0].focus()
-            
-            # Reset timer and disable resend button
-            self.buttonLbl_resendotp.config(state='disabled')
-            self.start_otp_timer()
-        else:
-            messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+        try:
+            success = await email_service.send_otp_email(self.user_data['email'], self.otp_code)
+            if success:
+                messagebox.showinfo("Success", "New OTP sent to your email!")
+                if self.otp_entries:
+                    self.otp_entries[0].focus()
+                
+                # Reset timer and disable resend button
+                self.buttonLbl_resendotp.config(state='disabled')
+                self.start_otp_timer()
+            else:
+                messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to send OTP: {str(e)}")
+
+    def resend_otp(self):
+        """Synchronous wrapper for async OTP resend"""
+        try:
+            # Run the async function in a new event loop
+            asyncio.run(self.resend_otp_async())
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to resend OTP: {str(e)}")
 
     def start_otp_timer(self):
         """Start timer to check OTP expiry"""

@@ -2,7 +2,10 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
+import aiomysql
+import asyncio
 from utils import UtilityFunctions, EmailService
+from config import DB_CONFIG
 from otp import OTPVerificationWindow
 import sys
 import os
@@ -30,6 +33,21 @@ class ForgotPasswordWindow:
         self.user_email = None
         
         self.setup_ui()
+        
+    async def get_async_db_connection(self):
+        """Get async database connection"""
+        try:
+            connection = await aiomysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                db=DB_CONFIG['database'],
+                port=DB_CONFIG['port']
+            )
+            return connection
+        except Exception as e:
+            print(f"Async database connection failed: {e}")
+            return None
         
     def setup_ui(self):
         self.canvas = Canvas(
@@ -107,8 +125,8 @@ class ForgotPasswordWindow:
         )
         self.button_back.place(x=624.0, y=16.0, width=30.0, height=30.0)
 
-    def send_reset_email(self):
-        """Send password reset OTP email"""
+    async def send_reset_email_async(self):
+        """Send password reset OTP email asynchronously"""
         email = self.entry_email.get().strip()
         
         if not email:
@@ -119,15 +137,15 @@ class ForgotPasswordWindow:
             messagebox.showerror("Error", "Please enter a valid email address")
             return
 
-        db_connection = self.get_db_connection()
+        db_connection = await self.get_async_db_connection()
         if not db_connection:
             messagebox.showerror("Database Error", "Cannot connect to database")
             return
 
         try:
-            cursor = db_connection.cursor()
-            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-            user = cursor.fetchone()
+            cursor = await db_connection.cursor()
+            await cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+            user = await cursor.fetchone()
 
             if not user:
                 messagebox.showerror("Error", "No account found with this email address")
@@ -137,18 +155,30 @@ class ForgotPasswordWindow:
             self.otp_code = UtilityFunctions.generate_otp()
             self.user_email = email
 
-            # Send OTP email
+            # Send OTP email using async email service
             email_service = EmailService()
-            if email_service.send_otp_email_sync(email, self.otp_code):
-                self.show_otp_verification()
-            else:
-                messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+            try:
+                success = await email_service.send_otp_email(email, self.otp_code)
+                if success:
+                    self.show_otp_verification()
+                else:
+                    messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to send OTP: {str(e)}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to process request: {str(e)}")
         finally:
-            if db_connection and db_connection.is_connected():
-                cursor.close()
+            if db_connection:
+                await db_connection.ensure_closed()
+
+    def send_reset_email(self):
+        """Synchronous wrapper for async password reset email"""
+        try:
+            # Run the async function in a new event loop
+            asyncio.run(self.send_reset_email_async())
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to send reset email: {str(e)}")
 
     def show_otp_verification(self):
         """Show OTP verification for password reset"""

@@ -2,7 +2,10 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
+import aiomysql
+import asyncio
 from utils import UtilityFunctions
+from config import DB_CONFIG
 import sys
 import os
 
@@ -33,6 +36,21 @@ class LoginWindow:
         self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
         
         self.setup_ui()
+        
+    async def get_async_db_connection(self):
+        """Get async database connection"""
+        try:
+            connection = await aiomysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                db=DB_CONFIG['database'],
+                port=DB_CONFIG['port']
+            )
+            return connection
+        except Exception as e:
+            print(f"Async database connection failed: {e}")
+            return None
         
     def setup_ui(self):
         # Clear any existing widgets first
@@ -166,7 +184,8 @@ class LoginWindow:
             entry_widget.config(show="●")
             button_widget.config(image=self.button_view_img)
 
-    def attempt_login(self):
+    async def attempt_login_async(self):
+        """Attempt login asynchronously"""
         username_input = self.entry_username.get().strip()
         password = self.entry_pass.get().strip()
 
@@ -174,18 +193,18 @@ class LoginWindow:
             messagebox.showerror("Error", "Please enter both username/email and password")
             return
 
-        db_connection = self.get_db_connection()
+        db_connection = await self.get_async_db_connection()
         if not db_connection:
             messagebox.showerror("Database Error", "Cannot connect to database")
             return
 
         try:
-            cursor = db_connection.cursor(dictionary=True)
+            cursor = await db_connection.cursor(aiomysql.DictCursor)
             
             # Determine if input is email or student number
             if UtilityFunctions.is_valid_email(username_input):
                 # Input is an email - search by email
-                cursor.execute("""
+                await cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
                     LEFT JOIN students s ON u.user_id = s.user_id 
@@ -193,7 +212,7 @@ class LoginWindow:
                 """, (username_input,))
             else:
                 # Input is likely a student number - search by student number or username
-                cursor.execute("""
+                await cursor.execute("""
                     SELECT u.*, s.student_number, s.first_name, s.last_name, s.course, s.year_level
                     FROM users u 
                     LEFT JOIN students s ON u.user_id = s.user_id 
@@ -201,7 +220,7 @@ class LoginWindow:
                     AND u.is_verified = TRUE AND u.is_active = TRUE
                 """, (username_input, username_input))
             
-            user = cursor.fetchone()
+            user = await cursor.fetchone()
 
             if user and UtilityFunctions.verify_password(password, user['password_hash']):
                 # Prepare user data for session
@@ -231,11 +250,19 @@ class LoginWindow:
             else:
                 messagebox.showerror("Login Failed", "Invalid username/email or password")
 
-        except mysql.connector.Error as e:
+        except Exception as e:
             messagebox.showerror("Database Error", f"Login failed: {str(e)}")
         finally:
-            if db_connection and db_connection.is_connected():
-                cursor.close()
+            if db_connection:
+                await db_connection.ensure_closed()
+
+    def attempt_login(self):
+        """Synchronous wrapper for async login attempt"""
+        try:
+            # Run the async function in a new event loop
+            asyncio.run(self.attempt_login_async())
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to login: {str(e)}")
 
     def destroy(self):
         """Clean up the window"""

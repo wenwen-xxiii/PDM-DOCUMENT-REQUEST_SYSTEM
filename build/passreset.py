@@ -2,7 +2,10 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 from utils import UtilityFunctions
+from config import DB_CONFIG
 import mysql.connector
+import aiomysql
+import asyncio
 import sys
 import os
 
@@ -31,6 +34,21 @@ class PasswordResetWindow:
         self.button_view_img = PhotoImage(file=relative_to_assets("button_view.png"))
         
         self.setup_ui()
+    
+    async def get_async_db_connection(self):
+        """Get async database connection"""
+        try:
+            connection = await aiomysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                db=DB_CONFIG['database'],
+                port=DB_CONFIG['port']
+            )
+            return connection
+        except Exception as e:
+            print(f"Async database connection failed: {e}")
+            return None
         
     def setup_ui(self):
         self.canvas = Canvas(
@@ -135,8 +153,8 @@ class PasswordResetWindow:
             entry_widget.config(show="●")
             button_widget.config(image=self.button_view_img)
 
-    def reset_password(self):
-        """Reset the user's password"""
+    async def reset_password_async(self):
+        """Reset the user's password asynchronously"""
         new_password = self.entry_newpass.get().strip()
         confirm_password = self.entry_confirmpass.get().strip()
 
@@ -152,30 +170,38 @@ class PasswordResetWindow:
             messagebox.showerror("Error", "Password must be at least 6 characters long")
             return
 
-        db_connection = self.get_db_connection()
+        db_connection = await self.get_async_db_connection()
         if not db_connection:
             messagebox.showerror("Database Error", "Cannot connect to database")
             return
 
         try:
-            cursor = db_connection.cursor()
+            cursor = await db_connection.cursor()
             hashed_password = UtilityFunctions.hash_password(new_password)
-            cursor.execute(
+            await cursor.execute(
                 "UPDATE users SET password_hash = %s WHERE email = %s",
                 (hashed_password, self.user_email)
             )
             if cursor.rowcount == 0:
                 messagebox.showerror("Error", "Failed to reset password. User not found.")
                 return
-            db_connection.commit()
+            await db_connection.commit()
             messagebox.showinfo("Success", "Password reset successfully!")
             self.show_login_callback()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reset password: {str(e)}")
-            db_connection.rollback()
+            await db_connection.rollback()
         finally:
-            if db_connection and db_connection.is_connected():
-                cursor.close()
+            if db_connection:
+                await db_connection.ensure_closed()
+
+    def reset_password(self):
+        """Synchronous wrapper for async password reset"""
+        try:
+            # Run the async function in a new event loop
+            asyncio.run(self.reset_password_async())
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to reset password: {str(e)}")
 
     def go_back(self):
         """Return to login screen"""

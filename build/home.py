@@ -3,10 +3,13 @@ from tkinter import Tk, Canvas, Button, PhotoImage, Frame, Label, messagebox
 import sys
 import os
 import tkinter as tk
+import asyncio
 from tkinter import messagebox
 from profile import ProfileWindow
 from document import DocumentWindow
 import mysql.connector
+import aiomysql
+from config import DB_CONFIG
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -50,6 +53,21 @@ class HomeWindow:
         self.parent.bind("<Configure>", self.on_resize)
 
         self.setup_ui()
+
+    async def get_async_db_connection(self):
+        """Get async database connection"""
+        try:
+            connection = await aiomysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                db=DB_CONFIG['database'],
+                port=DB_CONFIG['port']
+            )
+            return connection
+        except Exception as e:
+            print(f"Async database connection failed: {e}")
+            return None
 
     def on_resize(self, event):
         """Handle window resize events"""
@@ -262,8 +280,8 @@ class HomeWindow:
         self.update_layout()
         self.show_home()
 
-    def show_home(self):
-        """Show home dashboard with image_10.png as background"""
+    async def show_home_async(self):
+        """Show home dashboard asynchronously"""
         self.current_content = "home"
         self.clear_content()
 
@@ -307,8 +325,58 @@ class HomeWindow:
                     0, 140, width, height, fill="#FCECB7", outline="", tags="home_bg_image"
                 )
 
-    def show_programs(self):
-        """Show programs interface with image_11.png as background"""
+    def show_home(self):
+        """Synchronous wrapper for async home display"""
+        try:
+            asyncio.run(self.show_home_async())
+        except Exception as e:
+            print(f"Error showing home: {e}")
+            # Fallback to original implementation
+            self.current_content = "home"
+            self.clear_content()
+
+            width = self.parent.winfo_width()
+            height = self.parent.winfo_height()
+            content_height = max(1, height - 140)
+
+            # Hide programs background if it exists
+            if self.canvas.find_withtag('programs_bg_image'):
+                self.canvas.itemconfig('programs_bg_image', state='hidden')
+
+            # Load and display the home background image
+            try:
+                from PIL import Image, ImageTk
+
+                bg_path = resource_path("resources/assets/frame0/image_10.png")
+                self.pil_home_bg_image = Image.open(bg_path)
+
+                # Resize the image
+                resized_image = self.pil_home_bg_image.resize(
+                    (width, content_height),
+                    Image.Resampling.LANCZOS
+                )
+                self.home_bg_image = ImageTk.PhotoImage(resized_image)
+
+                # Create or update the image on canvas
+                if self.canvas.find_withtag('home_bg_image'):
+                    self.canvas.itemconfig('home_bg_image', image=self.home_bg_image, state='normal')
+                else:
+                    self.home_bg_image_id = self.canvas.create_image(
+                        0, 140,
+                        image=self.home_bg_image,
+                        anchor="nw",
+                        tags="home_bg_image"
+                    )
+
+            except Exception as e:
+                print(f"Could not load home background image: {e}")
+                if not self.canvas.find_withtag('home_bg_image'):
+                    self.canvas.create_rectangle(
+                        0, 140, width, height, fill="#FCECB7", outline="", tags="home_bg_image"
+                    )
+
+    async def show_programs_async(self):
+        """Show programs interface asynchronously"""
         self.current_content = "programs"
         self.clear_content()
 
@@ -352,8 +420,58 @@ class HomeWindow:
                     0, 140, width, height, fill="white", outline="", tags="programs_bg_image"
                 )
 
-    def show_document_request(self):
-        """Show document request to user using separate window"""
+    def show_programs(self):
+        """Synchronous wrapper for async programs display"""
+        try:
+            asyncio.run(self.show_programs_async())
+        except Exception as e:
+            print(f"Error showing programs: {e}")
+            # Fallback to original implementation
+            self.current_content = "programs"
+            self.clear_content()
+
+            width = self.parent.winfo_width()
+            height = self.parent.winfo_height()
+            content_height = max(1, height - 140)
+
+            # Hide home background if it exists
+            if self.canvas.find_withtag('home_bg_image'):
+                self.canvas.itemconfig('home_bg_image', state='hidden')
+
+            # Load and display the programs background image
+            try:
+                from PIL import Image, ImageTk
+
+                bg_path = resource_path("resources/assets/frame0/image_11.png")
+                self.pil_programs_bg_image = Image.open(bg_path)
+
+                # Resize the image
+                resized_image = self.pil_programs_bg_image.resize(
+                    (width, content_height),
+                    Image.Resampling.LANCZOS
+                )
+                self.programs_bg_image = ImageTk.PhotoImage(resized_image)
+
+                # Create or update the image on canvas
+                if self.canvas.find_withtag('programs_bg_image'):
+                    self.canvas.itemconfig('programs_bg_image', image=self.programs_bg_image, state='normal')
+                else:
+                    self.programs_bg_image_id = self.canvas.create_image(
+                        0, 140,
+                        image=self.programs_bg_image,
+                        anchor="nw",
+                        tags="programs_bg_image"
+                    )
+
+            except Exception as e:
+                print(f"Could not load programs background image: {e}")
+                if not self.canvas.find_withtag('programs_bg_image'):
+                    self.canvas.create_rectangle(
+                        0, 140, width, height, fill="white", outline="", tags="programs_bg_image"
+                    )
+
+    async def show_document_request_async(self):
+        """Show document request asynchronously"""
         self.current_content = "document"
         self.clear_content()
 
@@ -378,8 +496,39 @@ class HomeWindow:
             navigation_callbacks=navigation_callbacks,
         )
 
-    def show_profile(self):
-        """Show user profile using the separate ProfileWindow"""
+    def show_document_request(self):
+        """Synchronous wrapper for async document request display"""
+        try:
+            asyncio.run(self.show_document_request_async())
+        except Exception as e:
+            print(f"Error showing document request: {e}")
+            # Fallback to original implementation
+            self.current_content = "document"
+            self.clear_content()
+
+            print(f"🔍 DEBUG: Passing user_data to DocumentWindow: {self.user_data}")
+            print(f"🔍 DEBUG: User ID in user_data: {self.user_data.get('user_id')}")
+            print(
+                f"🔍 DEBUG: Student number in user_data: {self.user_data.get('student_number')}"
+            )
+
+            navigation_callbacks = {
+                "home": self.show_home,
+                "programs": self.show_programs,
+                "documents": self.show_document_request,
+                "logout": self.logout,
+            }
+
+            self.document_window = DocumentWindow(
+                parent=self.parent,
+                user_data=self.user_data,
+                user_type=self.user_type,
+                get_db_connection=self.get_db_connection,
+                navigation_callbacks=navigation_callbacks,
+            )
+
+    async def show_profile_async(self):
+        """Show user profile asynchronously"""
         self.current_content = "profile"
         self.clear_content()
 
@@ -397,6 +546,31 @@ class HomeWindow:
             get_db_connection=self.get_db_connection,
             navigation_callbacks=navigation_callbacks,
         )
+
+    def show_profile(self):
+        """Synchronous wrapper for async profile display"""
+        try:
+            asyncio.run(self.show_profile_async())
+        except Exception as e:
+            print(f"Error showing profile: {e}")
+            # Fallback to original implementation
+            self.current_content = "profile"
+            self.clear_content()
+
+            navigation_callbacks = {
+                "home": self.show_home,
+                "programs": self.show_programs,
+                "documents": self.show_document_request,
+                "logout": self.logout,
+            }
+
+            self.profile_window = ProfileWindow(
+                parent=self.parent,
+                user_data=self.user_data,
+                user_type=self.user_type,
+                get_db_connection=self.get_db_connection,
+                navigation_callbacks=navigation_callbacks,
+            )
 
     def clear_content(self):
         """Clear current content but keep navigation"""
