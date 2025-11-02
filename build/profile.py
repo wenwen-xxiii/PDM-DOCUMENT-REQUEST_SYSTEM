@@ -155,7 +155,7 @@ class ProfileWindow:
         return ' '.join(proper_parts)
 
     def format_display_name(self, first_name, middle_name, last_name):
-        """Format name for display: Firstname MiddleInitial. Lastname with proper casing"""
+        """Format name for display: Firstname Middlename Lastname with proper casing"""
         if not first_name:
             return ""
         
@@ -167,9 +167,8 @@ class ProfileWindow:
         display_name = first_name
         
         if middle_name:
-            # Get first character of middle name and add period
-            middle_initial = middle_name[0].upper() + "."
-            display_name += f" {middle_initial}"
+            # Use full middle name instead of just initial
+            display_name += f" {middle_name}"
         
         if last_name:
             display_name += f" {last_name}"
@@ -210,6 +209,24 @@ class ProfileWindow:
             return 16
         else:
             return 14
+
+    def validate_contact_number(self, event=None):
+        """Validate contact number - must be 9 or 11 digits starting with 09"""
+        contact = self.entry_contact.get().strip()
+        
+        # Allow empty field (will be validated on save)
+        if not contact:
+            self.entry_contact.config(fg="#000716")
+            return
+        
+        # Remove non-digits for validation
+        digits_only = ''.join(char for char in contact if char.isdigit())
+        
+        # Check if valid (9 or 11 digits starting with 09)
+        if len(digits_only) in [9, 11] and digits_only.startswith('09'):
+            self.entry_contact.config(fg="#006400")  # Green for valid
+        else:
+            self.entry_contact.config(fg="#8B0000")  # Red for invalid
 
     def setup_profile_picture(self):
         """Setup profile picture with border and upload functionality"""
@@ -424,6 +441,8 @@ class ProfileWindow:
         self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                  relief="flat", bg="#FFF1C2", font=("Inter", 10))
         self.entry_contact.place(x=445.0, y=110.0, width=224.0, height=38.0)
+        # Add validation for contact number
+        self.entry_contact.bind('<KeyRelease>', self.validate_contact_number)
         
         # Ensure the widget is properly initialized
         try:
@@ -436,6 +455,7 @@ class ProfileWindow:
             self.entry_contact = Entry(self.main_frame, bd=0, fg="#000716", highlightthickness=0, 
                                      relief="flat", bg="#FFF1C2", font=("Inter", 10))
             self.entry_contact.place(x=445.0, y=110.0, width=224.0, height=38.0)
+            self.entry_contact.bind('<KeyRelease>', self.validate_contact_number)
 
         # Date of Birth (adjusted y from 219 to 79)
         self.canvas.create_text(698.0, 79.0, anchor="nw", text="Date Of Birth", 
