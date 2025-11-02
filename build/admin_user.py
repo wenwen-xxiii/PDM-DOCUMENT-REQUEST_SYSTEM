@@ -244,25 +244,9 @@ class AdminUserManager:
     def load_users(self):
         """Load users from database (sync wrapper)"""
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # No event loop running, create a new one
-            try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.load_users_async)
-                    return future.result()
-            except Exception as e:
-                print(f"❌ Error in async load_users: {e}")
-                return safe_async_run(self.load_users_async)
-        else:
-            # Event loop exists, run in thread pool
-            try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.load_users_async)
-                    return future.result()
-            except Exception as e:
-                print(f"❌ Error in async load_users: {e}")
-                return safe_async_run(self.load_users_async)
+            safe_async_run(self.load_users_async)
+        except Exception as e:
+            print(f"❌ Error in async load_users: {e}")
 
     def update_display(self):
         """Update the display with current page data"""
@@ -691,25 +675,10 @@ class AdminUserManager:
             # Use threading to avoid blocking UI
             def save_thread():
                 try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(safe_async_run, self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
-                            result = future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async save_user: {e}")
-                        result = safe_async_run(self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
-                else:
-                    # Event loop exists, run in thread pool
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(safe_async_run, self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
-                            result = future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async save_user: {e}")
-                        result = safe_async_run(self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
+                    result = safe_async_run(self.update_user_async, user['user_id'], email, user_type, is_verified, new_password if update_password else None)
+                except Exception as e:
+                    print(f"❌ Error in async save_user: {e}")
+                    result = None
                 
                 # Schedule UI update on main thread
                 self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))
@@ -779,25 +748,10 @@ class AdminUserManager:
     def update_user(self, user_id, email, user_type, is_verified, new_password=None):
         """Update user information in database (sync wrapper)"""
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # No event loop running, create a new one
-            try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.update_user_async, user_id, email, user_type, is_verified, new_password)
-                    return future.result()
-            except Exception as e:
-                print(f"❌ Error in async update_user: {e}")
-                return safe_async_run(self.update_user_async, user_id, email, user_type, is_verified, new_password)
-        else:
-            # Event loop exists, run in thread pool
-            try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.update_user_async, user_id, email, user_type, is_verified, new_password)
-                    return future.result()
-            except Exception as e:
-                print(f"❌ Error in async update_user: {e}")
-                return safe_async_run(self.update_user_async, user_id, email, user_type, is_verified, new_password)
+            return safe_async_run(self.update_user_async, user_id, email, user_type, is_verified, new_password)
+        except Exception as e:
+            print(f"❌ Error in async update_user: {e}")
+            return False
 
     async def toggle_user_status_async(self, user, new_status):
         """Change user active status (async version)"""
@@ -842,25 +796,9 @@ class AdminUserManager:
             # Use threading to avoid blocking UI
             def toggle_status_thread():
                 try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(safe_async_run, self.toggle_user_status_async, user, new_status)
-                            return future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async toggle_user_status: {e}")
-                        return safe_async_run(self.toggle_user_status_async, user, new_status)
-                else:
-                    # Event loop exists, run in thread pool
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(safe_async_run, self.toggle_user_status_async, user, new_status)
-                            return future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async toggle_user_status: {e}")
-                        return safe_async_run(self.toggle_user_status_async, user, new_status)
+                    safe_async_run(self.toggle_user_status_async, user, new_status)
+                except Exception as e:
+                    print(f"❌ Error in async toggle_user_status: {e}")
             
             toggle_status_thread_obj = threading.Thread(target=toggle_status_thread, daemon=True)
             toggle_status_thread_obj.start()
@@ -904,25 +842,9 @@ class AdminUserManager:
         # Use threading to avoid blocking UI
         def refresh_thread():
             try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # No event loop running, create a new one
-                try:
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(safe_async_run, self.load_users_async)
-                        result = future.result()
-                except Exception as e:
-                    print(f"❌ Error in async refresh_users: {e}")
-                    result = safe_async_run(self.load_users_async)
-            else:
-                # Event loop exists, run in thread pool
-                try:
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(safe_async_run, self.load_users_async)
-                        result = future.result()
-                except Exception as e:
-                    print(f"❌ Error in async refresh_users: {e}")
-                    result = safe_async_run(self.load_users_async)
+                safe_async_run(self.load_users_async)
+            except Exception as e:
+                print(f"❌ Error in async refresh_users: {e}")
             
             # Schedule UI update on main thread
             self.parent.after(0, self._update_ui_after_refresh)

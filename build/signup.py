@@ -10,6 +10,8 @@ import re
 import asyncio
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+import threading
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -272,7 +274,11 @@ class SignupWindow:
 
     def attempt_signup(self):
         """Synchronous wrapper for async signup"""
-        asyncio.create_task(self.attempt_signup_async())
+        # Run in background thread to avoid blocking UI
+        def signup_thread():
+            safe_async_run(self.attempt_signup_async)
+        
+        threading.Thread(target=signup_thread, daemon=True).start()
 
     async def attempt_signup_async(self):
         """Attempt to sign up the user asynchronously"""
@@ -421,37 +427,18 @@ class SignupWindow:
 
     def complete_registration(self):
         """Synchronous wrapper for async registration completion"""
-        asyncio.create_task(self.complete_registration_async())
-
-    async def complete_registration_async(self):
-        """Complete the registration process asynchronously with proper transaction handling"""
-        if not self.user_data:
-            await self.run_in_main_thread(
-                lambda: messagebox.showerror("Error", "Registration failed")
-            )
-            return
-
+        # Run directly - we're already being called from a callback
         try:
-            # Run database operations in thread pool
-            result = await self.run_in_thread_pool(
-                lambda: self._complete_registration_db()
-            )
+            result = self._complete_registration_db()
             
             if result['success']:
                 success_message = result['message']
-                await self.run_in_main_thread(
-                    lambda: messagebox.showinfo("Success", success_message.strip())
-                )
-                await self.run_in_main_thread(self.show_login_callback)
+                messagebox.showinfo("Success", success_message.strip())
+                self.show_login_callback()
             else:
-                await self.run_in_main_thread(
-                    lambda: messagebox.showerror("Registration Error", result['error'])
-                )
-
+                messagebox.showerror("Registration Error", result['error'])
         except Exception as e:
-            await self.run_in_main_thread(
-                lambda: messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")
-            )
+            messagebox.showerror("Unexpected Error", f"An unexpected error occurred: {str(e)}")
 
     def _complete_registration_db(self):
         """Complete registration in database (runs in thread pool)"""

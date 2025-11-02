@@ -4,8 +4,10 @@ import time
 import sys
 import os
 import asyncio
+import threading
 from config import DB_CONFIG
 import aiomysql
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -55,6 +57,10 @@ class OTPVerificationWindow:
         except Exception as e:
             print(f"Async database connection failed: {e}")
             return None
+    
+    def run_in_main_thread(self, func):
+        """Run function in main Tkinter thread"""
+        self.parent.after(0, func)
         
     def setup_ui(self):
         self.canvas = Canvas(
@@ -303,22 +309,33 @@ class OTPVerificationWindow:
     def get_entered_otp(self):
         """Get the complete OTP from all entry fields"""
         return ''.join(entry.get() for entry in self.otp_entries)
+    
+    def _focus_first_empty_otp(self):
+        """Focus on first empty OTP field"""
+        for entry in self.otp_entries:
+            if not entry.get():
+                entry.focus()
+                break
+    
+    def _clear_and_focus_otp(self):
+        """Clear all OTP fields and focus on first one"""
+        for entry in self.otp_entries:
+            entry.delete(0, 'end')
+        if self.otp_entries:
+            self.otp_entries[0].focus()
 
     async def verify_otp_async(self):
         """Verify the entered OTP asynchronously"""
         entered_otp = self.get_entered_otp()
         
         if time.time() > self.otp_expiry_time:
-            messagebox.showerror("Error", "OTP has expired. Please request a new one.")
+            self.run_in_main_thread(lambda: messagebox.showerror("Error", "OTP has expired. Please request a new one."))
             return
         
         if len(entered_otp) != 6:
-            messagebox.showerror("Error", "Please enter the complete 6-digit OTP")
+            self.run_in_main_thread(lambda: messagebox.showerror("Error", "Please enter the complete 6-digit OTP"))
             # Focus on first empty OTP field
-            for i, entry in enumerate(self.otp_entries):
-                if not entry.get():
-                    entry.focus()
-                    break
+            self.run_in_main_thread(lambda: self._focus_first_empty_otp())
             return
         
         if entered_otp == self.otp_code:
@@ -329,7 +346,7 @@ class OTPVerificationWindow:
                     cursor = await db_connection.cursor()
                     # Update user verification status or log OTP verification
                     await cursor.execute(
-                        "UPDATE users SET email_verified = 1 WHERE email = %s",
+                        "UPDATE users SET is_verified = 1 WHERE email = %s",
                         (self.user_data['email'],)
                     )
                     await db_connection.commit()
@@ -339,23 +356,23 @@ class OTPVerificationWindow:
                     if db_connection:
                         await db_connection.ensure_closed()
             
-            messagebox.showinfo("Success", "OTP verified successfully!")
-            self.verification_callback()
+            self.run_in_main_thread(lambda: messagebox.showinfo("Success", "OTP verified successfully!"))
+            self.run_in_main_thread(self.verification_callback)
         else:
-            messagebox.showerror("Error", "Invalid OTP. Please try again.")
+            self.run_in_main_thread(lambda: messagebox.showerror("Error", "Invalid OTP. Please try again."))
             # Clear all fields and focus on first one
-            for entry in self.otp_entries:
-                entry.delete(0, 'end')
-            if self.otp_entries:
-                self.otp_entries[0].focus()
+            self.run_in_main_thread(lambda: self._clear_and_focus_otp())
 
     def verify_otp(self):
         """Synchronous wrapper for async OTP verification"""
-        try:
-            # Run the async function in a new event loop
-            asyncio.run(self.verify_otp_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to verify OTP: {str(e)}")
+        # Run in background thread to avoid blocking UI
+        def verify_thread():
+            try:
+                safe_async_run(self.verify_otp_async)
+            except Exception as e:
+                self.run_in_main_thread(lambda: messagebox.showerror("Error", f"Failed to verify OTP: {str(e)}"))
+        
+        threading.Thread(target=verify_thread, daemon=True).start()
 
     async def resend_otp_async(self):
         """Resend OTP code asynchronously"""
@@ -365,33 +382,34 @@ class OTPVerificationWindow:
         self.otp_expiry_time = time.time() + 180  # Reset to 3 minutes
         
         # Clear OTP entries
-        for entry in self.otp_entries:
-            entry.delete(0, 'end')
+        self.run_in_main_thread(lambda: [entry.delete(0, 'end') for entry in self.otp_entries])
         
         # Resend email using async email service
         email_service = EmailService()
         try:
             success = await email_service.send_otp_email(self.user_data['email'], self.otp_code)
             if success:
-                messagebox.showinfo("Success", "New OTP sent to your email!")
-                if self.otp_entries:
-                    self.otp_entries[0].focus()
+                self.run_in_main_thread(lambda: messagebox.showinfo("Success", "New OTP sent to your email!"))
+                self.run_in_main_thread(lambda: self.otp_entries[0].focus() if self.otp_entries else None)
                 
                 # Reset timer and disable resend button
-                self.buttonLbl_resendotp.config(state='disabled')
-                self.start_otp_timer()
+                self.run_in_main_thread(lambda: self.buttonLbl_resendotp.config(state='disabled'))
+                self.run_in_main_thread(self.start_otp_timer)
             else:
-                messagebox.showerror("Error", "Failed to send OTP. Please try again.")
+                self.run_in_main_thread(lambda: messagebox.showerror("Error", "Failed to send OTP. Please try again."))
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to send OTP: {str(e)}")
+            self.run_in_main_thread(lambda: messagebox.showerror("Error", f"Failed to send OTP: {str(e)}"))
 
     def resend_otp(self):
         """Synchronous wrapper for async OTP resend"""
-        try:
-            # Run the async function in a new event loop
-            asyncio.run(self.resend_otp_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to resend OTP: {str(e)}")
+        # Run in background thread to avoid blocking UI
+        def resend_thread():
+            try:
+                safe_async_run(self.resend_otp_async)
+            except Exception as e:
+                self.run_in_main_thread(lambda: messagebox.showerror("Error", f"Failed to resend OTP: {str(e)}"))
+        
+        threading.Thread(target=resend_thread, daemon=True).start()
 
     def start_otp_timer(self):
         """Start timer to check OTP expiry"""

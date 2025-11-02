@@ -667,18 +667,9 @@ Document uploaded successfully!
         # Use threading to avoid blocking UI
         def submit_thread():
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're already in an async context, run in thread
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(safe_async_run, self.submit_document_async)
-                        return future.result()
-                else:
-                    return loop.run_until_complete(self.submit_document_async())
-            except RuntimeError:
-                # No event loop running, create a new one
-                return safe_async_run(self.submit_document_async)
+                safe_async_run(self.submit_document_async)
+            except Exception as e:
+                print(f"❌ Error submitting document: {e}")
         
         # Run submit in background thread
         submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)

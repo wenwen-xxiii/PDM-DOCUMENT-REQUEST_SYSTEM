@@ -8,6 +8,8 @@ import aiomysql
 import asyncio
 import sys
 import os
+import threading
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -270,11 +272,14 @@ class PasswordResetWindow:
 
     def reset_password(self):
         """Synchronous wrapper for async password reset"""
-        try:
-            # Run the async function in a new event loop
-            asyncio.run(self.reset_password_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to reset password: {str(e)}")
+        # Run in background thread to avoid blocking UI
+        def reset_thread():
+            try:
+                safe_async_run(self.reset_password_async)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to reset password: {str(e)}")
+        
+        threading.Thread(target=reset_thread, daemon=True).start()
 
     def go_back(self):
         """Return to login screen"""

@@ -19,7 +19,9 @@ def run_async_in_thread(async_func):
             if loop.is_running():
                 # If we're in a running event loop, use thread pool
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, async_func(*args, **kwargs))
+                    def run_coro():
+                        return asyncio.run(async_func(*args, **kwargs))
+                    future = executor.submit(run_coro)
                     return future.result()
             else:
                 # No event loop running, we can use asyncio.run
@@ -32,22 +34,12 @@ def run_async_in_thread(async_func):
 
 def safe_async_run(async_func, *args, **kwargs):
     """
-    Safely run an async function without causing event loop conflicts
+    Safely run an async function without causing event loop conflicts.
+    This function is designed to be called from within a background thread.
+    We always create a new event loop with asyncio.run() since we're in a separate thread.
     """
-    try:
-        # Check if we're already in an event loop
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If we're in a running event loop, use thread pool
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, async_func(*args, **kwargs))
-                return future.result()
-        else:
-            # No event loop running, we can use asyncio.run
-            return asyncio.run(async_func(*args, **kwargs))
-    except RuntimeError:
-        # No event loop exists, create a new one
-        return asyncio.run(async_func(*args, **kwargs))
+    # Create a new event loop and run the async function
+    return asyncio.run(async_func(*args, **kwargs))
 
 
 def run_in_thread_pool(func, *args, **kwargs):

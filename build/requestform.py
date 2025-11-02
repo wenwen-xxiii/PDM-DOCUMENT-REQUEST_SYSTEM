@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import your existing modules
 from config import DB_CONFIG
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -353,19 +354,7 @@ class DocumentRequestWindow:
 
     def load_document_types(self):
         """Load available document types from database (sync wrapper)"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, run in thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.load_document_types_async())
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.load_document_types_async())
-        except RuntimeError:
-            # No event loop running, create a new one
-            return asyncio.run(self.load_document_types_async())
+        safe_async_run(self.load_document_types_async)
 
     def on_document_type_selected(self, event):
         """Handle document type selection"""
@@ -571,19 +560,7 @@ class DocumentRequestWindow:
         """Submit the document request (sync wrapper)"""
         # Use threading to avoid blocking UI
         def submit_thread():
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're already in an async context, run in thread
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, self.submit_request_async())
-                        return future.result()
-                else:
-                    return loop.run_until_complete(self.submit_request_async())
-            except RuntimeError:
-                # No event loop running, create a new one
-                return asyncio.run(self.submit_request_async())
+            safe_async_run(self.submit_request_async)
         
         # Run submit in background thread
         submit_thread_obj = threading.Thread(target=submit_thread, daemon=True)

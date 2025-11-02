@@ -6,6 +6,7 @@ import mysql.connector
 from datetime import datetime
 from config import DB_CONFIG, PAYMONGO_CONFIG
 from concurrent.futures import ThreadPoolExecutor
+from async_utils import safe_async_run
 
 class PayMongoProcessor:
     def __init__(self):
@@ -226,17 +227,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     def _find_checkout_session_by_payment_intent(self, payment_intent_id):
         """Find checkout session by payment intent ID"""
@@ -271,17 +262,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     def _find_most_recent_pending_checkout_session(self):
         """Find the most recent pending checkout session"""
@@ -321,17 +302,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     def _update_using_request_metadata(self, metadata, payment_id):
         """Fallback: Update database using request metadata directly"""
@@ -434,17 +405,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     async def _get_payment_details_async(self, payment_id):
         """Get payment details from PayMongo asynchronously"""
@@ -696,17 +657,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
     
     def _update_to_failed_status(self, checkout_session_id):
         """Update database when payment fails - FIXED"""
@@ -747,17 +698,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     def create_checkout_session(self, request_id, amount, description, metadata=None, success_url=None, cancel_url=None):
         """Synchronous wrapper for async checkout session creation"""
@@ -913,17 +854,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
 
     def _find_checkout_session_by_payment_metadata(self, payment_id):
         """Try to find checkout session by searching payment metadata in database"""
@@ -967,17 +898,7 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)
     
     def sync_payment_intent_ids(self):
         """Sync payment_intent_id between payments and document_requests tables"""
@@ -1036,14 +957,4 @@ class PayMongoProcessor:
             self.executor.shutdown(wait=False)
         
         # Close HTTP session if running in async context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Schedule cleanup for later
-                asyncio.create_task(self.cleanup_http_session())
-            else:
-                # Run cleanup immediately
-                asyncio.run(self.cleanup_http_session())
-        except RuntimeError:
-            # No event loop running, skip HTTP session cleanup
-            pass
+        safe_async_run(self.cleanup_http_session)

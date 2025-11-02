@@ -9,6 +9,8 @@ from config import DB_CONFIG
 from otp import OTPVerificationWindow
 import sys
 import os
+import threading
+from async_utils import safe_async_run
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -174,11 +176,14 @@ class ForgotPasswordWindow:
 
     def send_reset_email(self):
         """Synchronous wrapper for async password reset email"""
-        try:
-            # Run the async function in a new event loop
-            asyncio.run(self.send_reset_email_async())
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to send reset email: {str(e)}")
+        # Run in background thread to avoid blocking UI
+        def send_thread():
+            try:
+                safe_async_run(self.send_reset_email_async)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to send reset email: {str(e)}")
+        
+        threading.Thread(target=send_thread, daemon=True).start()
 
     def show_otp_verification(self):
         """Show OTP verification for password reset"""

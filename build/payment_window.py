@@ -6,9 +6,11 @@ import mysql.connector
 from datetime import datetime
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 from config import DB_CONFIG
 from payment_processor import PayMongoProcessor
+from async_utils import safe_async_run
 
 class PaymentWindow:
     def __init__(self, parent, request_data, student_data, refresh_callback=None):
@@ -249,7 +251,11 @@ class PaymentWindow:
         
     def process_payment(self):
         """Synchronous wrapper for async payment processing"""
-        asyncio.create_task(self.process_payment_async())
+        # Run in background thread to avoid blocking UI
+        def payment_thread():
+            safe_async_run(self.process_payment_async)
+        
+        threading.Thread(target=payment_thread, daemon=True).start()
 
     async def process_payment_async(self):
         """Process payment based on selected method asynchronously"""

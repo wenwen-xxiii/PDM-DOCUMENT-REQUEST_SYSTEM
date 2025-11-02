@@ -13,6 +13,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 import io
 from config import APP_CONFIG, EMAIL_CONFIG
+from async_utils import safe_async_run
 
 class UtilityFunctions:
     @staticmethod
@@ -415,75 +416,23 @@ class EmailService:
     # Helper methods to run async functions from sync contexts
     def send_otp_email_sync(self, to_email, otp_code):
         """Synchronous wrapper for async send_otp_email"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, create a task
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_otp_email(to_email, otp_code))
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_otp_email(to_email, otp_code))
-        except RuntimeError:
-            # No event loop running, create a new one
-            return asyncio.run(self.send_otp_email(to_email, otp_code))
+        return safe_async_run(self.send_otp_email, to_email, otp_code)
 
     def send_email_with_attachments_sync(self, to_email, subject, body, attachments_data):
         """Synchronous wrapper for async send_email_with_attachments"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_email_with_attachments(to_email, subject, body, attachments_data))
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_email_with_attachments(to_email, subject, body, attachments_data))
-        except RuntimeError:
-            return asyncio.run(self.send_email_with_attachments(to_email, subject, body, attachments_data))
+        return safe_async_run(self.send_email_with_attachments, to_email, subject, body, attachments_data)
 
     def send_document_ready_email_sync(self, to_email, request_details, db_connection):
         """Synchronous wrapper for async send_document_ready_email"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_document_ready_email(to_email, request_details, db_connection))
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_document_ready_email(to_email, request_details, db_connection))
-        except RuntimeError:
-            return asyncio.run(self.send_document_ready_email(to_email, request_details, db_connection))
+        return safe_async_run(self.send_document_ready_email, to_email, request_details, db_connection)
 
     def send_request_confirmation_sync(self, to_email, request_details):
         """Synchronous wrapper for async send_request_confirmation"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self.send_request_confirmation(to_email, request_details))
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_request_confirmation(to_email, request_details))
-        except RuntimeError:
-            return asyncio.run(self.send_request_confirmation(to_email, request_details))
+        return safe_async_run(self.send_request_confirmation, to_email, request_details)
 
     def _send_email_sync(self, to_email, subject, body):
         """Synchronous wrapper for async _send_email"""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(asyncio.run, self._send_email(to_email, subject, body))
-                    return future.result()
-            else:
-                return loop.run_until_complete(self._send_email(to_email, subject, body))
-        except RuntimeError:
-            return asyncio.run(self._send_email(to_email, subject, body))
+        return safe_async_run(self._send_email, to_email, subject, body)
 
 
 class PaymentProcessor:

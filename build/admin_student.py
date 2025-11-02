@@ -982,37 +982,13 @@ class AdminStudentManager:
             # Use threading to avoid blocking UI
             def save_thread():
                 try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            if student:
-                                future = executor.submit(safe_async_run, self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
-                            else:
-                                future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
-                            result = future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async save_student: {e}")
-                        if student:
-                            result = safe_async_run(self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
-                        else:
-                            result = safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
-                else:
-                    # Event loop exists, run in thread pool
-                    try:
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            if student:
-                                future = executor.submit(safe_async_run, self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
-                            else:
-                                future = executor.submit(safe_async_run, self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
-                            result = future.result()
-                    except Exception as e:
-                        print(f"❌ Error in async save_student: {e}")
-                        if student:
-                            result = safe_async_run(self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
-                        else:
-                            result = safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
+                    if student:
+                        result = safe_async_run(self.update_student_async, student['student_id'], first_name, last_name, middle_name, course, year_level, contact_number, address)
+                    else:
+                        result = safe_async_run(self.add_new_student_async, student_number, first_name, last_name, middle_name, course, year_level, contact_number, address, email)
+                except Exception as e:
+                    print(f"❌ Error in async save_student: {e}")
+                    result = None
                 
                 # Schedule UI update on main thread
                 self.parent.after(0, lambda: self._update_ui_after_save(result, dialog))

@@ -252,18 +252,9 @@ class AdminRequestManager:
     def load_document_requests(self):
         """Load document requests from database using your schema (sync wrapper)"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, run in thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.load_document_requests_async)
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.load_document_requests_async())
-        except RuntimeError:
-            # No event loop running, create a new one
-            return safe_async_run(self.load_document_requests_async)
+            safe_async_run(self.load_document_requests_async)
+        except Exception as e:
+            print(f"❌ Error loading document requests: {e}")
 
     def update_display(self):
         """Update the display with current page data"""
@@ -563,18 +554,10 @@ class AdminRequestManager:
     def send_email_notification(self, student_email, subject, body, attachments=None):
         """Send email notification to student using enhanced email service (sync wrapper)"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, run in thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.send_email_notification_async, student_email, subject, body, attachments)
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_email_notification_async(student_email, subject, body, attachments))
-        except RuntimeError:
-            # No event loop running, create a new one
             return safe_async_run(self.send_email_notification_async, student_email, subject, body, attachments)
+        except Exception as e:
+            print(f"❌ Error sending email notification: {e}")
+            return False
     
     def _fallback_email_notification(self, student_email, subject, body, attachments=None):
         """Fallback email notification method"""
@@ -892,18 +875,10 @@ class AdminRequestManager:
     def send_document_ready_email(self, request):
         """Send email with document attachments when document is ready (sync wrapper)"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, run in thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self.send_document_ready_email_async, request)
-                    return future.result()
-            else:
-                return loop.run_until_complete(self.send_document_ready_email_async(request))
-        except RuntimeError:
-            # No event loop running, create a new one
             return safe_async_run(self.send_document_ready_email_async, request)
+        except Exception as e:
+            print(f"❌ Error sending document ready email: {e}")
+            return False
 
     def view_request(self, request):
         """View request details and attachments"""
@@ -1279,18 +1254,10 @@ class AdminRequestManager:
                                      processed_date=None, ready_date=None, completed_date=None):
         """Helper to update a document_requests row and refresh local cache/UI (sync wrapper)."""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in an async context, run in thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(safe_async_run, self._update_request_status_in_db_async, request_id, status, payment_status, processed_date, ready_date, completed_date)
-                    return future.result()
-            else:
-                return loop.run_until_complete(self._update_request_status_in_db_async(request_id, status, payment_status, processed_date, ready_date, completed_date))
-        except RuntimeError:
-            # No event loop running, create a new one
-                return safe_async_run(self._update_request_status_in_db_async, request_id, status, payment_status, processed_date, ready_date, completed_date)
+            return safe_async_run(self._update_request_status_in_db_async, request_id, status, payment_status, processed_date, ready_date, completed_date)
+        except Exception as e:
+            print(f"❌ Error updating request status: {e}")
+            return False
 
     def approve_payment(self, request):
         """Approve payment and set status to processing"""
