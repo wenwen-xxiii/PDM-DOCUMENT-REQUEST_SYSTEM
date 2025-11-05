@@ -3,7 +3,6 @@ mysql-connector-python==9.0.0
 aiomysql==0.2.0
 python-dotenv==1.0.1
 pyinstaller==6.10.0
-paymongo==0.3.1
 flask==3.0.3
 PyMuPDF==1.23.14
 aiosmtplib==3.0.1
