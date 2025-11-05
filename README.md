@@ -32,10 +32,12 @@ The system supports multiple user roles with role-based access control:
 - **Cashier**: Can manage billing, payments, and view requests (limited to payment-related functions)
 
 ### System Features
-- **Email Notifications**: Automated OTP emails, document ready notifications, and request confirmations via SMTP
+- **Email Notifications**: Automated OTP emails, document ready notifications, request confirmations, and payment receipts via SMTP
 - **File Attachments**: Support for document attachments with PDF viewing capability
 - **Database Integration**: MySQL database with proper relationships and async support
-- **Security**: Password hashing (SHA-256), rate limiting, and input validation
+- **Security**: Password hashing (SHA-256), rate limiting, account lockout, and input validation
+- **Audit Logging**: Comprehensive activity tracking for all system operations (login, payments, requests, user management)
+- **Request Sequencing**: Unique request number generation with daily reset (format: PDM-YYYY-MMDD-XXX)
 - **Responsive UI**: Modern, user-friendly interface with custom graphics
 - **Async Operations**: Support for asynchronous database operations using aiomysql
 - **Password Recovery**: Secure password reset with OTP verification
@@ -186,7 +188,9 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 │   │   └── webhook_server.py      # Webhook handling
 │   ├── utils/                     # Utility functions
 │   │   ├── utils.py               # General utilities
-│   │   └── async_utils.py         # Async utility functions
+│   │   ├── async_utils.py         # Async utility functions
+│   │   ├── audit_logger.py        # Audit logging utility
+│   │   └── request_sequence.py    # Request number generation utility
 │   ├── config/                    # Configuration
 │   │   └── config.py              # Application settings
 │   ├── database/                  # Database related
@@ -201,7 +205,9 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 ├── .gitignore                     # Git ignore rules
 ├── LICENSE                        # License file
 ├── requirements.txt               # Python dependencies
-└── README.md                      # This file
+├── README.md                      # This file
+├── AUDIT_AND_SEQUENCES_GUIDE.md   # Guide for audit logging and request sequences
+└── REQUEST_SEQUENCES_GUIDE.md     # Detailed guide for request sequence usage
 ```
 
 ## 🗄️ Database Schema
@@ -217,8 +223,8 @@ The system uses the following main tables:
 - **feedback**: User feedback and complaints
 - **otp_codes**: OTP verification codes with expiration
 - **system_settings**: Application-wide configuration settings
-- **audit_logs**: System activity audit logs
-- **request_sequences**: Sequence tracking for request number generation
+- **audit_logs**: System activity audit logs (tracks all user actions, data changes, and security events)
+- **request_sequences**: Sequence tracking for unique request number generation (daily reset)
 
 ## 🔐 Security Features
 
@@ -229,6 +235,7 @@ The system uses the following main tables:
 - **Rate Limiting**: Maximum login attempts (default: 3) with account lockout (30 minutes)
 - **Role-Based Access Control**: Granular permissions for different user roles
 - **Secure Password Reset**: OTP-based password recovery system
+- **Audit Trail**: Comprehensive logging of all system activities including user actions, data changes, and security events
 
 ## 💳 Payment Integration
 
@@ -237,6 +244,8 @@ The system integrates with PayMongo for payment processing:
 - Payment status tracking
 - Webhook support for payment notifications (optional)
 - Payment history tracking
+- Automated payment receipt emails upon successful payment
+- Support for both online (PayMongo) and offline (cash) payment methods
 
 ## 📧 Email Integration
 
@@ -245,6 +254,7 @@ Automated email notifications using async SMTP for:
 - Document request confirmation emails
 - Document ready notifications with attachments
 - Password reset OTP codes
+- Payment receipt emails (with transaction details)
 
 ## 🎨 User Interface
 
@@ -299,8 +309,17 @@ For support and questions:
 - Create an issue in the repository
 - Contact the development team
 - Check the documentation
+- See `AUDIT_AND_SEQUENCES_GUIDE.md` for audit logging and request sequence usage
+- See `REQUEST_SEQUENCES_GUIDE.md` for detailed request sequence implementation
 
 ## 🔄 Version History
+
+- **v1.1.0**: Enhanced features and security
+  - Comprehensive audit logging system integrated across all operations
+  - Request number sequencing with daily reset (PDM-YYYY-MMDD-XXX format)
+  - Payment receipt email notifications
+  - Rate limiting and account lockout mechanism
+  - Enhanced security tracking and compliance
 
 - **v1.0.0**: Initial release with core functionality
   - Document request system with multiple document types
