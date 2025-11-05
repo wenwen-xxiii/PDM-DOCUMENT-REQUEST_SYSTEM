@@ -1,6 +1,8 @@
 # PDM Document Request System
 
-A comprehensive desktop application built with Python Tkinter for managing document requests in educational institutions. This system facilitates students to request official documents, administrators to process requests, and handles payment processing through PayMongo integration.
+A comprehensive desktop application built with Python Tkinter for managing document requests in educational institutions. This system is designed for **Pambayang Dalubhasaan ng Marilao (PDM)** and facilitates students to request official documents, administrators to process requests, and handles payment processing through PayMongo integration.
+
+The system supports multiple user roles with role-based access control, ensuring secure and efficient document request management for educational institutions.
 
 ## 🚀 Features
 
@@ -13,29 +15,42 @@ A comprehensive desktop application built with Python Tkinter for managing docum
 - **Document Viewing**: Preview and download requested documents
 
 ### Admin Features
-- **Dashboard**: Comprehensive overview with statistics
+- **Dashboard**: Comprehensive overview with statistics and real-time metrics
 - **Request Management**: Process and approve/reject document requests
 - **Student Management**: View and manage student records
-- **Document Management**: Upload and manage document templates
+- **Document Management**: Upload and manage document templates and types
 - **Billing Management**: Track payments and generate reports
 - **User Management**: Manage user accounts and permissions
 - **Feedback System**: Handle student feedback and complaints
 
+### User Roles & Permissions
+The system supports multiple user roles with role-based access control:
+
+- **Student**: Can request documents, view status, make payments, and manage profile
+- **Admin**: Full access to all system features and management functions
+- **Registrar**: Can manage requests, students, documents, and feedback (no billing access)
+- **Cashier**: Can manage billing, payments, and view requests (limited to payment-related functions)
+
 ### System Features
-- **Email Notifications**: Automated OTP and status updates
-- **File Attachments**: Support for document attachments
-- **Database Integration**: MySQL database with proper relationships
-- **Security**: Password hashing, session management, and input validation
+- **Email Notifications**: Automated OTP and status updates via SMTP
+- **File Attachments**: Support for document attachments and PDF viewing
+- **Database Integration**: MySQL database with proper relationships and async support
+- **Security**: Password hashing (SHA-256), session management, and input validation
 - **Responsive UI**: Modern, user-friendly interface with custom graphics
+- **Async Operations**: Support for asynchronous database operations using aiomysql
+- **Password Recovery**: Secure password reset with OTP verification
+- **Document Preview**: Built-in PDF viewer for document attachments
 
 ## 🛠️ Technology Stack
 
 - **Frontend**: Python Tkinter (GUI Framework)
-- **Backend**: Python 3.x
-- **Database**: MySQL
+- **Backend**: Python 3.8+
+- **Database**: MySQL 5.7+ with async support (aiomysql)
 - **Payment Gateway**: PayMongo API
-- **Email Service**: SMTP (Gmail)
-- **File Processing**: PyMuPDF for PDF handling
+- **Email Service**: SMTP (Gmail) with async support (aiosmtplib)
+- **File Processing**: PyMuPDF (fitz) for PDF handling
+- **Web Framework**: Flask/Quart for webhook server
+- **HTTP Client**: aiohttp for async HTTP requests
 - **Deployment**: PyInstaller for executable creation
 
 ## 📋 Prerequisites
@@ -118,6 +133,27 @@ A comprehensive desktop application built with Python Tkinter for managing docum
    python src/scripts/run_ngrok.py
    ```
 
+## 🔑 Default Credentials
+
+After running the database initialization script, the following default accounts are created:
+
+- **Admin Account**: 
+  - Username: `admin`
+  - Password: `admin123`
+  - Access: Full system access
+
+- **Registrar Account**: 
+  - Username: `registrar`
+  - Password: `registrar123`
+  - Access: Request, student, document, and feedback management
+
+- **Cashier Account**: 
+  - Username: `cashier`
+  - Password: `cashier123`
+  - Access: Billing and payment management
+
+**⚠️ Important**: Change these default passwords immediately after first login in a production environment!
+
 ## 📁 Project Structure
 
 ```
@@ -132,7 +168,8 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 │   │   ├── document.py            # Document management
 │   │   ├── requestform.py         # Document request form
 │   │   ├── payment_window.py      # Payment processing window
-│   │   ├── forgotpass.py          # Password recovery
+│   │   ├── forgotpass.py          # Password recovery request
+│   │   ├── passreset.py           # Password reset interface
 │   │   ├── otp.py                 # OTP verification
 │   │   ├── admin_dashboard.py     # Admin dashboard
 │   │   ├── admin_request.py       # Admin request management
@@ -141,7 +178,8 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 │   │   ├── admin_student.py       # Admin student management
 │   │   ├── admin_user.py          # Admin user management
 │   │   ├── admin_feedback.py      # Admin feedback management
-│   │   └── admin_upload_docu.py  # Admin document upload
+│   │   ├── admin_upload_docu.py   # Admin document upload
+│   │   └── view_docu_attachment.py # Document attachment viewer
 │   ├── services/                  # External service integrations
 │   │   ├── payment_processor.py   # Payment processing logic
 │   │   └── webhook_server.py      # Webhook handling
@@ -168,22 +206,27 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 ## 🗄️ Database Schema
 
 The system uses the following main tables:
-- **users**: User authentication and account information
+- **users**: User authentication and account information (supports: student, admin, registrar, cashier roles)
 - **students**: Student profile and academic information
-- **document_requests**: Document request records
-- **document_types**: Available document types
+- **staff**: Staff member information (admin, registrar, cashier)
+- **document_requests**: Document request records with status tracking
+- **document_types**: Available document types with pricing and processing details
+- **document_attachments**: File attachments for document requests
 - **payments**: Payment transaction records
 - **feedback**: User feedback and complaints
-- **otp_codes**: OTP verification codes
+- **otp_codes**: OTP verification codes with expiration
+- **system_settings**: Application-wide configuration settings
 
 ## 🔐 Security Features
 
-- Password hashing using SHA-256
-- Session management with timeout
-- Input validation and sanitization
-- SQL injection prevention
-- OTP-based email verification
-- Rate limiting for login attempts
+- **Password Security**: SHA-256 hashing for password storage
+- **Session Management**: Configurable session timeout (default: 30 minutes)
+- **Input Validation**: Comprehensive input validation and sanitization
+- **SQL Injection Prevention**: Parameterized queries throughout
+- **OTP Verification**: Time-based OTP (expires in 10 minutes) for email verification
+- **Rate Limiting**: Maximum login attempts (default: 3) with account lockout
+- **Role-Based Access Control**: Granular permissions for different user roles
+- **Secure Password Reset**: OTP-based password recovery system
 
 ## 💳 Payment Integration
 
@@ -195,11 +238,12 @@ The system integrates with PayMongo for payment processing:
 
 ## 📧 Email Integration
 
-Automated email notifications for:
-- OTP verification codes
-- Request status updates
-- Payment confirmations
-- System notifications
+Automated email notifications using async SMTP for:
+- OTP verification codes (with expiration time)
+- Request status updates (pending, processing, ready, completed)
+- Payment confirmations and receipts
+- Password reset links and OTP codes
+- System notifications and alerts
 
 ## 🎨 User Interface
 
@@ -223,8 +267,18 @@ The application can be configured through:
 The application can be packaged as a standalone executable using PyInstaller:
 
 ```bash
-pyinstaller --onefile --windowed --add-data "resources;resources" src/main.py
+# Windows
+pyinstaller --onefile --windowed --add-data "resources;resources" --icon=resources/assets/PDMICON.ico src/main.py
+
+# Linux/Mac
+pyinstaller --onefile --windowed --add-data "resources:resources" --icon=resources/assets/PDMICON.ico src/main.py
 ```
+
+**Note**: Make sure to:
+1. Configure all environment variables in `.env` file before building
+2. Test the executable in a clean environment
+3. Include all required assets in the `resources` directory
+4. Ensure MySQL server is accessible from the deployment environment
 
 ## 🤝 Contributing
 
@@ -248,10 +302,16 @@ For support and questions:
 ## 🔄 Version History
 
 - **v1.0.0**: Initial release with core functionality
-- Document request system
-- Payment integration
-- Admin dashboard
-- User management
+  - Document request system with multiple document types
+  - PayMongo payment integration
+  - Multi-role admin dashboard (Admin, Registrar, Cashier)
+  - User management with role-based access control
+  - OTP-based email verification
+  - Password recovery system
+  - Document attachment support
+  - Feedback and complaint system
+  - Async database operations
+  - PDF document viewer
 
 ## 📞 Contact
 
