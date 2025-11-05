@@ -61,10 +61,10 @@ A comprehensive desktop application built with Python Tkinter for managing docum
 
 3. **Database Setup**
    - Create a MySQL database
-   - Update database credentials in `build/config.py` or create a `.env` file
+   - Update database credentials in `src/config/config.py` or create a `.env` file
    - Run the database initialization script:
    ```bash
-   python build/init_database.py
+   python src/database/init_database.py
    ```
 
 4. **Environment Configuration**
@@ -105,48 +105,62 @@ A comprehensive desktop application built with Python Tkinter for managing docum
 
 1. **Start the main application**
    ```bash
-   python build/main.py
+   python src/main.py
    ```
 
 2. **For webhook server (if using PayMongo webhooks)**
    ```bash
-   python build/run_webhook.py
+   python src/scripts/run_webhook.py
    ```
 
 3. **For Ngrok tunneling (if needed)**
    ```bash
-   python build/run_ngrok.py
+   python src/scripts/run_ngrok.py
    ```
 
 ## 📁 Project Structure
 
 ```
 PDM-DOCUMENT-REQUEST_SYSTEM/
-├── build/                          # Main application files
+├── src/                           # Source code
 │   ├── main.py                    # Application entry point
-│   ├── config.py                  # Configuration settings
-│   ├── init_database.py           # Database initialization
-│   ├── login.py                   # Login interface
-│   ├── signup.py                  # Registration interface
-│   ├── home.py                    # Main dashboard
-│   ├── document.py                # Document management
-│   ├── requestform.py             # Document request form
-│   ├── payment_window.py          # Payment processing
-│   ├── admin_dashboard.py         # Admin dashboard
-│   ├── admin_request.py           # Admin request management
-│   ├── admin_documents.py         # Admin document management
-│   ├── admin_billing.py           # Admin billing management
-│   ├── admin_student.py           # Admin student management
-│   ├── admin_user.py              # Admin user management
-│   ├── admin_feedback.py          # Admin feedback management
-│   ├── profile.py                 # User profile management
-│   ├── forgotpass.py              # Password recovery
-│   ├── otp.py                     # OTP verification
-│   ├── payment_processor.py       # Payment processing logic
-│   ├── webhook_server.py          # Webhook handling
-│   └── utils.py                   # Utility functions
+│   ├── views/                     # UI components (Tkinter windows)
+│   │   ├── login.py               # Login interface
+│   │   ├── signup.py              # Registration interface
+│   │   ├── home.py                # Main dashboard
+│   │   ├── profile.py             # User profile management
+│   │   ├── document.py            # Document management
+│   │   ├── requestform.py         # Document request form
+│   │   ├── payment_window.py      # Payment processing window
+│   │   ├── forgotpass.py          # Password recovery
+│   │   ├── otp.py                 # OTP verification
+│   │   ├── admin_dashboard.py     # Admin dashboard
+│   │   ├── admin_request.py       # Admin request management
+│   │   ├── admin_documents.py     # Admin document management
+│   │   ├── admin_billing.py       # Admin billing management
+│   │   ├── admin_student.py       # Admin student management
+│   │   ├── admin_user.py          # Admin user management
+│   │   ├── admin_feedback.py      # Admin feedback management
+│   │   └── admin_upload_docu.py  # Admin document upload
+│   ├── services/                  # External service integrations
+│   │   ├── payment_processor.py   # Payment processing logic
+│   │   └── webhook_server.py      # Webhook handling
+│   ├── utils/                     # Utility functions
+│   │   ├── utils.py               # General utilities
+│   │   └── async_utils.py         # Async utility functions
+│   ├── config/                    # Configuration
+│   │   └── config.py              # Application settings
+│   ├── database/                  # Database related
+│   │   └── init_database.py       # Database initialization
+│   └── scripts/                   # Standalone scripts
+│       ├── run_webhook.py         # Webhook server runner
+│       └── run_ngrok.py           # Ngrok tunnel runner
 ├── resources/                     # Application assets
 │   └── assets/                    # UI images and graphics
+├── tests/                         # Test files
+├── .env.example                   # Environment variables template
+├── .gitignore                     # Git ignore rules
+├── LICENSE                        # License file
 ├── requirements.txt               # Python dependencies
 └── README.md                      # This file
 ```
@@ -198,8 +212,8 @@ Automated email notifications for:
 ## 🔧 Configuration
 
 The application can be configured through:
-- Environment variables (`.env` file)
-- Configuration file (`build/config.py`)
+- Environment variables (`.env` file) - Copy `.env.example` to `.env` and fill in your values
+- Configuration file (`src/config/config.py`)
 - Database settings
 - Email service settings
 - Payment gateway settings
@@ -209,7 +223,7 @@ The application can be configured through:
 The application can be packaged as a standalone executable using PyInstaller:
 
 ```bash
-pyinstaller --onefile --windowed build/main.py
+pyinstaller --onefile --windowed --add-data "resources;resources" src/main.py
 ```
 
 ## 🤝 Contributing
