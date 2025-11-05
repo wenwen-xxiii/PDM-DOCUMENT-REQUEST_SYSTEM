@@ -536,7 +536,7 @@ class AdminBillingManager:
                 messagebox.showerror("Database Error", "Could not connect to database")
                 return
                 
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
             
             # Update payment status
             cursor.execute("""
@@ -552,11 +552,64 @@ class AdminBillingManager:
                 WHERE request_id = %s
             """, (datetime.now(), payment['request_id']))
             
+            # Get payment details for receipt email
+            cursor.execute("""
+                SELECT 
+                    dr.request_number,
+                    dr.total_amount,
+                    dr.quantity,
+                    dt.name as document_name,
+                    p.reference_number,
+                    p.paid_at,
+                    u.email as student_email,
+                    CONCAT(s.first_name, ' ', s.last_name) as student_name
+                FROM document_requests dr
+                LEFT JOIN payments p ON dr.request_id = p.request_id
+                LEFT JOIN document_types dt ON dr.document_type_id = dt.document_type_id
+                LEFT JOIN students s ON dr.student_id = s.student_id
+                LEFT JOIN users u ON s.user_id = u.user_id
+                WHERE dr.request_id = %s
+            """, (payment['request_id'],))
+            
+            receipt_data = cursor.fetchone()
+            
             connection.commit()
             cursor.close()
             connection.close()
             
             print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
+            
+            # Send payment receipt email
+            if receipt_data and receipt_data.get('student_email'):
+                try:
+                    from utils.utils import email_service
+                    from utils.async_utils import safe_async_run
+                    import threading
+                    
+                    payment_details = {
+                        'student_name': receipt_data['student_name'] or 'Student',
+                        'request_number': receipt_data['request_number'],
+                        'amount': float(receipt_data['total_amount'] or 0),
+                        'payment_method': payment.get('payment_method', 'Cash').title(),
+                        'reference_number': receipt_data['reference_number'] or payment.get('reference_number', 'N/A'),
+                        'transaction_id': receipt_data['reference_number'] or payment.get('reference_number', 'N/A'),
+                        'payment_date': receipt_data['paid_at'] or datetime.now(),
+                        'document_name': receipt_data['document_name'] or 'Document',
+                        'quantity': receipt_data['quantity'] or 1
+                    }
+                    
+                    def send_receipt():
+                        safe_async_run(
+                            email_service.send_payment_receipt,
+                            receipt_data['student_email'],
+                            payment_details
+                        )
+                    
+                    threading.Thread(target=send_receipt, daemon=True).start()
+                    print(f"📧 Payment receipt email queued for: {receipt_data['student_email']}")
+                except Exception as e:
+                    print(f"⚠️ Failed to send payment receipt email: {e}")
+            
             messagebox.showinfo("Success", f"Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
             
             # Refresh the display

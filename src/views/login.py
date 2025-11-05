@@ -2,10 +2,10 @@ from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
 from utils.utils import UtilityFunctions
-from config.config import DB_CONFIG
+from config.config import DB_CONFIG, SYSTEM_CONFIG
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -168,7 +168,7 @@ class LoginWindow:
             button_widget.config(image=self.button_view_img)
 
     def attempt_login(self):
-        """Attempt login synchronously and track last login"""
+        """Attempt login synchronously with rate limiting and account lockout"""
         username_input = self.entry_username.get().strip()
         password = self.entry_pass.get().strip()
 
@@ -204,12 +204,62 @@ class LoginWindow:
                 """, (username_input, username_input))
             
             user = cursor.fetchone()
+            
+            if not user:
+                # User not found - don't reveal if account exists
+                messagebox.showerror("Login Failed", "Invalid username/email or password")
+                return
+            
+            # Check if account is locked
+            locked_until = user.get('locked_until')
+            if locked_until:
+                # Handle both datetime object and string formats
+                if isinstance(locked_until, datetime):
+                    locked_until_dt = locked_until
+                elif isinstance(locked_until, str):
+                    try:
+                        locked_until_dt = datetime.strptime(locked_until, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        try:
+                            locked_until_dt = datetime.strptime(locked_until, '%Y-%m-%d %H:%M:%S.%f')
+                        except ValueError:
+                            # If parsing fails, assume lockout expired
+                            locked_until_dt = datetime.now() - timedelta(seconds=1)
+                else:
+                    locked_until_dt = datetime.now() - timedelta(seconds=1)
+                
+                if datetime.now() < locked_until_dt:
+                    remaining_time = locked_until_dt - datetime.now()
+                    minutes = int(remaining_time.total_seconds() / 60)
+                    seconds = int(remaining_time.total_seconds() % 60)
+                    messagebox.showerror(
+                        "Account Locked",
+                        f"Your account has been locked due to too many failed login attempts.\n\n"
+                        f"Please try again in {minutes} minute(s) and {seconds} second(s).\n\n"
+                        f"If you've forgotten your password, please use the 'Forgot Password' option."
+                    )
+                    cursor.close()
+                    db_connection.close()
+                    return
+                else:
+                    # Lockout period expired, unlock the account
+                    cursor.execute("""
+                        UPDATE users 
+                        SET login_attempts = 0, locked_until = NULL 
+                        WHERE user_id = %s
+                    """, (user['user_id'],))
+                    db_connection.commit()
+                    user['login_attempts'] = 0
+                    user['locked_until'] = None
 
-            if user and UtilityFunctions.verify_password(password, user['password_hash']):
-                # Update last login timestamp
+            # Verify password
+            if UtilityFunctions.verify_password(password, user['password_hash']):
+                # Successful login - reset login attempts and update last login
                 cursor.execute("""
                     UPDATE users 
-                    SET last_login = CURRENT_TIMESTAMP 
+                    SET last_login = CURRENT_TIMESTAMP, 
+                        login_attempts = 0, 
+                        locked_until = NULL
                     WHERE user_id = %s
                 """, (user['user_id'],))
                 db_connection.commit()
@@ -240,7 +290,42 @@ class LoginWindow:
 
                 self.login_callback(user_data, user['user_type'])
             else:
-                messagebox.showerror("Login Failed", "Invalid username/email or password")
+                # Failed login - increment login attempts
+                current_attempts = user.get('login_attempts', 0) + 1
+                max_attempts = SYSTEM_CONFIG['max_login_attempts']
+                lockout_minutes = SYSTEM_CONFIG['account_lockout_minutes']
+                
+                if current_attempts >= max_attempts:
+                    # Lock the account
+                    lockout_until = datetime.now() + timedelta(minutes=lockout_minutes)
+                    cursor.execute("""
+                        UPDATE users 
+                        SET login_attempts = %s, 
+                            locked_until = %s
+                        WHERE user_id = %s
+                    """, (current_attempts, lockout_until, user['user_id']))
+                    db_connection.commit()
+                    
+                    messagebox.showerror(
+                        "Account Locked",
+                        f"Too many failed login attempts. Your account has been locked for {lockout_minutes} minutes.\n\n"
+                        f"If you've forgotten your password, please use the 'Forgot Password' option."
+                    )
+                else:
+                    # Update login attempts
+                    cursor.execute("""
+                        UPDATE users 
+                        SET login_attempts = %s
+                        WHERE user_id = %s
+                    """, (current_attempts, user['user_id']))
+                    db_connection.commit()
+                    
+                    remaining_attempts = max_attempts - current_attempts
+                    messagebox.showerror(
+                        "Login Failed",
+                        f"Invalid username/email or password.\n\n"
+                        f"Warning: {remaining_attempts} attempt(s) remaining before account lockout."
+                    )
 
         except Exception as e:
             messagebox.showerror("Database Error", f"Login failed: {str(e)}")

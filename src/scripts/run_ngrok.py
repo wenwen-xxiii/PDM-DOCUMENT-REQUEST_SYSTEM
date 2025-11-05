@@ -2,8 +2,13 @@ import subprocess
 import time
 import requests
 import threading
-from config.config import NGROK_CONFIG
 import sys
+import os
+
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.config import NGROK_CONFIG
 
 class NgrokManager:
     def __init__(self):
@@ -145,7 +150,8 @@ def setup_webhooks():
         
         # Update PayMongo configuration
         from config.config import PAYMONGO_CONFIG
-        PAYMONGO_CONFIG['webhook_url'] = webhook_url
+        if PAYMONGO_CONFIG:
+            PAYMONGO_CONFIG['webhook_url'] = webhook_url
         
         return webhook_url
     else:

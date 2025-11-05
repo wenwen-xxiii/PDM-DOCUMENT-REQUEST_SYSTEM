@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Add parent directories to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from services.webhook_server import app
 
 if __name__ == '__main__':

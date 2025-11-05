@@ -56,10 +56,30 @@ class DatabaseInitializer:
                     is_active BOOLEAN DEFAULT TRUE,
                     is_verified BOOLEAN DEFAULT FALSE,
                     last_login TIMESTAMP NULL,
+                    login_attempts INT DEFAULT 0,
+                    locked_until TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Add login_attempts and locked_until columns to existing tables if they don't exist
+            # MySQL doesn't support IF NOT EXISTS for ALTER TABLE, so we check first
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'login_attempts'")
+            if not cursor.fetchone():
+                try:
+                    cursor.execute("ALTER TABLE users ADD COLUMN login_attempts INT DEFAULT 0")
+                    print("✓ Added login_attempts column to users table")
+                except Error as e:
+                    print(f"⚠️ Could not add login_attempts column: {e}")
+            
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'locked_until'")
+            if not cursor.fetchone():
+                try:
+                    cursor.execute("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP NULL")
+                    print("✓ Added locked_until column to users table")
+                except Error as e:
+                    print(f"⚠️ Could not add locked_until column: {e}")
             
             # Students table (student-specific data)
             cursor.execute("""

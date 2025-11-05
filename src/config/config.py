@@ -25,7 +25,8 @@ EMAIL_CONFIG = {
 SYSTEM_CONFIG = {
     'otp_expiry_minutes': int(os.getenv('OTP_EXPIRY_MINUTES', '10')),
     'max_login_attempts': int(os.getenv('MAX_LOGIN_ATTEMPTS', '3')),
-    'session_timeout_minutes': int(os.getenv('SESSION_TIMEOUT_MINUTES', '30'))
+    'session_timeout_minutes': int(os.getenv('SESSION_TIMEOUT_MINUTES', '30')),
+    'account_lockout_minutes': int(os.getenv('ACCOUNT_LOCKOUT_MINUTES', '30'))
 }
 
 # Application Configuration

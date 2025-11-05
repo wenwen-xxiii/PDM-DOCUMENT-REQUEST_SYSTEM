@@ -249,10 +249,10 @@ class PasswordResetWindow:
                 messagebox.showerror("Error", "Failed to reset password. User not found or account not verified.")
                 return
             
-            # Update the password
+            # Update the password and unlock the account (reset login attempts)
             hashed_password = UtilityFunctions.hash_password(new_password)
             await cursor.execute(
-                "UPDATE users SET password_hash = %s WHERE email = %s AND is_verified = TRUE AND is_active = TRUE",
+                "UPDATE users SET password_hash = %s, login_attempts = 0, locked_until = NULL WHERE email = %s AND is_verified = TRUE AND is_active = TRUE",
                 (hashed_password, self.user_email)
             )
             
@@ -261,7 +261,7 @@ class PasswordResetWindow:
                 return
                 
             await db_connection.commit()
-            messagebox.showinfo("Success", "Password reset successfully!")
+            messagebox.showinfo("Success", "Password reset successfully! Your account has been unlocked. You can now login with your new password.")
             self.show_login_callback()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to reset password: {str(e)}")

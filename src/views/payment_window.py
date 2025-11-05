@@ -446,83 +446,38 @@ class PaymentWindow:
             request_number = self.request_data['request_number']
             document_name = self.request_data['document_name']
             amount = self.request_data['total_amount']
-            current_date = datetime.now().strftime('%Y-%m-%d')
             
-            subject = f"Cash Payment Instructions - Request #{request_number}"
-            
-            body = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-                    <div style="text-align: center; background: #800000; padding: 20px; border-radius: 10px 10px 0 0;">
-                        <h1 style="color: #FFD700; margin: 0;">PAMBAYANG DALUBHASAAN NG MARILAO</h1>
-                        <h2 style="color: white; margin: 10px 0 0 0;">Document Request System</h2>
-                    </div>
-                    
-                    <div style="padding: 30px;">
-                        <h2 style="color: #800000;">Cash Payment Instructions</h2>
-                        <p>Dear {student_name},</p>
-                        
-                        <p>Your cash payment for document request #{request_number} has been recorded. Please proceed with the payment following the instructions below.</p>
-                        
-                        <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
-                            <h3 style="color: #800000; margin-top: 0;">Payment Details:</h3>
-                            <p><strong>Request Number:</strong> #{request_number}</p>
-                            <p><strong>Document:</strong> {document_name}</p>
-                            <p><strong>Amount Due:</strong> ₱{amount:.2f}</p>
-                            <p><strong>Payment Method:</strong> Cash</p>
-                            <p><strong>Reference Number:</strong> {reference_number}</p>
-                            <p><strong>Payment Date:</strong> {current_date}</p>
-                        </div>
-                        
-                        <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <h4 style="color: #155724; margin-top: 0;">Payment Instructions:</h4>
-                            <p style="color: #155724; margin: 5px 0;"><strong>1. Location:</strong> Cashier's Office</p>
-                            <p style="color: #155724; margin: 5px 0;"><strong>2. Office Hours:</strong> Monday-Friday, 8:00 AM - 5:00 PM</p>
-                            <p style="color: #155724; margin: 5px 0;"><strong>3. Required:</strong> Present this reference number: <strong>{reference_number}</strong></p>
-                            <p style="color: #155724; margin: 5px 0;"><strong>4. Payment:</strong> Exact amount of ₱{amount:.2f}</p>
-                        </div>
-                        
-                        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <h4 style="color: #856404; margin-top: 0;">Important Notes:</h4>
-                            <p style="color: #856404; margin: 5px 0;">• Please pay within 3 working days to avoid cancellation</p>
-                            <p style="color: #856404; margin: 5px 0;">• Keep this reference number for your records</p>
-                            <p style="color: #856404; margin: 5px 0;">• Your document will be processed after payment confirmation</p>
-                        </div>
-                        
-                        <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <h4 style="color: #0c5460; margin-top: 0;">Next Steps:</h4>
-                            <p style="color: #0c5460; margin: 5px 0;">After payment, your document request will be processed</p>
-                            <p style="color: #0c5460; margin: 5px 0;">You will receive another email when your document is ready</p>
-                        </div>
-                        
-                        <hr style="margin: 30px 0;">
-                        <p style="color: #666; font-size: 12px;">
-                            This is an automated message. Please do not reply to this email.
-                        </p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
-            
+            # Use payment receipt format matching OTP email style
             if has_email_service:
-                # Send email using async email service
-                success = await email_service._send_email(student_email, subject, body)
+                quantity = self.request_data.get('quantity', 1)
+                payment_details = {
+                    'student_name': student_name,
+                    'request_number': request_number,
+                    'amount': amount,
+                    'payment_method': 'Cash',
+                    'reference_number': reference_number,
+                    'transaction_id': reference_number,
+                    'payment_date': datetime.now(),
+                    'document_name': document_name,
+                    'quantity': quantity
+                }
+                
+                success = await email_service.send_payment_receipt(student_email, payment_details)
                 if success:
-                    print(f"[OK] Cash payment email sent to {student_email}")
+                    print(f"[OK] Payment receipt sent to {student_email}")
                     return True
                 else:
-                    print(f"[ERROR] Failed to send cash payment email to {student_email}")
-                    # Fall through to fallback method
+                    print(f"[ERROR] Failed to send payment receipt to {student_email}")
+                    return False
                     
             # Fallback: Print email details
             print("=" * 60)
-            print("[EMAIL] CASH PAYMENT EMAIL (FALLBACK)")
+            print("[EMAIL] PAYMENT RECEIPT (FALLBACK)")
             print("=" * 60)
             print(f"To: {student_email}")
-            print(f"Subject: {subject}")
-            print(f"Body:\n{body}")
+            print(f"Request: {request_number}")
+            print(f"Amount: ₱{amount:.2f}")
+            print(f"Reference: {reference_number}")
             print("=" * 60)
             return True
             

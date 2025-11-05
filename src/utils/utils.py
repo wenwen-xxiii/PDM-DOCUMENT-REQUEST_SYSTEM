@@ -430,6 +430,175 @@ class EmailService:
         """Synchronous wrapper for async send_request_confirmation"""
         return safe_async_run(self.send_request_confirmation, to_email, request_details)
 
+    async def send_payment_receipt(self, to_email, payment_details):
+        """Send payment receipt email using async SMTP with OTP email format"""
+        try:
+            if not self.email_enabled:
+                return self._fallback_payment_receipt_email(to_email, payment_details)
+            
+            subject = f"Payment Receipt - {payment_details.get('request_number', '')}"
+            
+            # Format payment date
+            payment_date = payment_details.get('payment_date', '')
+            if payment_date:
+                if isinstance(payment_date, str):
+                    payment_date = payment_date
+                else:
+                    payment_date = payment_date.strftime('%B %d, %Y at %I:%M %p')
+            else:
+                payment_date = datetime.now().strftime('%B %d, %Y at %I:%M %p')
+            
+            # Format amount
+            amount = payment_details.get('amount', 0)
+            if isinstance(amount, (int, float)):
+                amount_str = f"₱{amount:,.2f}"
+            else:
+                amount_str = str(amount)
+            
+            body = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #f5f5f5;
+                    }}
+                    .email-container {{
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background-color: #ffffff;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 8px;
+                        overflow: hidden;
+                    }}
+                    .header {{
+                        background-color: #792D1B;
+                        padding: 30px 20px;
+                        text-align: center;
+                    }}
+                    .header h1 {{
+                        color: #FFD700;
+                        font-size: 24px;
+                        font-weight: bold;
+                        margin: 0;
+                        text-transform: uppercase;
+                    }}
+                    .header h2 {{
+                        color: #ffffff;
+                        font-size: 16px;
+                        font-weight: bold;
+                        margin: 10px 0 0 0;
+                    }}
+                    .body-content {{
+                        padding: 30px;
+                    }}
+                    .receipt-title {{
+                        color: #792D1B;
+                        font-size: 20px;
+                        font-weight: bold;
+                        margin-bottom: 20px;
+                    }}
+                    .receipt-box {{
+                        background-color: #f5f5f5;
+                        border-radius: 8px;
+                        padding: 25px;
+                        margin: 30px 0;
+                        text-align: center;
+                    }}
+                    .receipt-amount {{
+                        font-size: 36px;
+                        font-weight: bold;
+                        color: #792D1B;
+                        margin: 10px 0;
+                        letter-spacing: 2px;
+                    }}
+                    .receipt-details {{
+                        text-align: left;
+                        margin-top: 20px;
+                        line-height: 1.8;
+                    }}
+                    .receipt-details p {{
+                        margin: 8px 0;
+                        color: #333333;
+                    }}
+                    .receipt-details strong {{
+                        color: #792D1B;
+                    }}
+                    .separator {{
+                        border-top: 1px solid #e0e0e0;
+                        margin: 25px 0;
+                    }}
+                    .footer-note {{
+                        color: #666666;
+                        font-size: 12px;
+                        margin-top: 20px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="email-container">
+                    <div class="header">
+                        <h1>PAMBAYANG DALUBHASAAN NG MARILAO</h1>
+                        <h2>Document Request System</h2>
+                    </div>
+                    
+                    <div class="body-content">
+                        <div class="receipt-title">Payment Receipt</div>
+                        
+                        <p>Dear {payment_details.get('student_name', 'Student')},</p>
+                        <p>Your payment has been successfully processed. Please find the receipt details below:</p>
+                        
+                        <div class="receipt-box">
+                            <div class="receipt-amount">{amount_str}</div>
+                        </div>
+                        
+                        <div class="receipt-details">
+                            <p><strong>Request Number:</strong> {payment_details.get('request_number', 'N/A')}</p>
+                            <p><strong>Payment Method:</strong> {payment_details.get('payment_method', 'Online').title()}</p>
+                            <p><strong>Reference Number:</strong> {payment_details.get('reference_number', 'N/A')}</p>
+                            <p><strong>Transaction ID:</strong> {payment_details.get('transaction_id', 'N/A')}</p>
+                            <p><strong>Payment Date:</strong> {payment_date}</p>
+                            <p><strong>Document Type:</strong> {payment_details.get('document_name', 'N/A')}</p>
+                            <p><strong>Quantity:</strong> {payment_details.get('quantity', 1)}</p>
+                        </div>
+                        
+                        <p>Your document request is now being processed. You will receive a notification once it's ready.</p>
+                        
+                        <div class="separator"></div>
+                        
+                        <p class="footer-note">This is an automated message. Please do not reply to this email.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return await self._send_email(to_email, subject, body)
+            
+        except Exception as e:
+            print(f"[ERROR] Payment receipt email error: {e}")
+            return self._fallback_payment_receipt_email(to_email, payment_details)
+    
+    def _fallback_payment_receipt_email(self, to_email, payment_details):
+        """Fallback for payment receipt email"""
+        print("=" * 50)
+        print("[EMAIL] PAYMENT RECEIPT (FALLBACK)")
+        print("=" * 50)
+        print(f"To: {to_email}")
+        print(f"Request: {payment_details.get('request_number', 'N/A')}")
+        print(f"Amount: ₱{payment_details.get('amount', 0):.2f}")
+        print(f"Reference: {payment_details.get('reference_number', 'N/A')}")
+        print("=" * 50)
+        return True
+
+    def send_payment_receipt_sync(self, to_email, payment_details):
+        """Synchronous wrapper for async send_payment_receipt"""
+        return safe_async_run(self.send_payment_receipt, to_email, payment_details)
+
     def _send_email_sync(self, to_email, subject, body):
         """Synchronous wrapper for async _send_email"""
         return safe_async_run(self._send_email, to_email, subject, body)

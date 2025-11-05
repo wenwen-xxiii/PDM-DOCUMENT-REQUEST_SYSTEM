@@ -12,14 +12,14 @@ The system supports multiple user roles with role-based access control, ensuring
 - **Payment Processing**: Integrated PayMongo payment gateway
 - **Request Tracking**: View request status and history
 - **Profile Management**: Update personal information
-- **Document Viewing**: Preview and download requested documents
+- **Document Viewing**: Preview requested documents using built-in PDF viewer
 
 ### Admin Features
-- **Dashboard**: Comprehensive overview with statistics and real-time metrics
+- **Dashboard**: Comprehensive overview with statistics and metrics
 - **Request Management**: Process and approve/reject document requests
 - **Student Management**: View and manage student records
-- **Document Management**: Upload and manage document templates and types
-- **Billing Management**: Track payments and generate reports
+- **Document Management**: Upload document attachments to requests and manage document types
+- **Billing Management**: Track payments and view payment history
 - **User Management**: Manage user accounts and permissions
 - **Feedback System**: Handle student feedback and complaints
 
@@ -32,14 +32,14 @@ The system supports multiple user roles with role-based access control:
 - **Cashier**: Can manage billing, payments, and view requests (limited to payment-related functions)
 
 ### System Features
-- **Email Notifications**: Automated OTP and status updates via SMTP
-- **File Attachments**: Support for document attachments and PDF viewing
+- **Email Notifications**: Automated OTP emails, document ready notifications, and request confirmations via SMTP
+- **File Attachments**: Support for document attachments with PDF viewing capability
 - **Database Integration**: MySQL database with proper relationships and async support
-- **Security**: Password hashing (SHA-256), session management, and input validation
+- **Security**: Password hashing (SHA-256), rate limiting, and input validation
 - **Responsive UI**: Modern, user-friendly interface with custom graphics
 - **Async Operations**: Support for asynchronous database operations using aiomysql
 - **Password Recovery**: Secure password reset with OTP verification
-- **Document Preview**: Built-in PDF viewer for document attachments
+- **Document Viewer**: Built-in PDF viewer for document attachments
 
 ## 🛠️ Technology Stack
 
@@ -114,6 +114,7 @@ The system supports multiple user roles with role-based access control:
    OTP_EXPIRY_MINUTES=10
    MAX_LOGIN_ATTEMPTS=3
    SESSION_TIMEOUT_MINUTES=30
+   ACCOUNT_LOCKOUT_MINUTES=30
    ```
 
 ## 🚀 Running the Application
@@ -178,7 +179,7 @@ PDM-DOCUMENT-REQUEST_SYSTEM/
 │   │   ├── admin_student.py       # Admin student management
 │   │   ├── admin_user.py          # Admin user management
 │   │   ├── admin_feedback.py      # Admin feedback management
-│   │   ├── admin_upload_docu.py   # Admin document upload
+│   │   ├── admin_upload_docu.py   # Admin document attachment upload
 │   │   └── view_docu_attachment.py # Document attachment viewer
 │   ├── services/                  # External service integrations
 │   │   ├── payment_processor.py   # Payment processing logic
@@ -216,34 +217,34 @@ The system uses the following main tables:
 - **feedback**: User feedback and complaints
 - **otp_codes**: OTP verification codes with expiration
 - **system_settings**: Application-wide configuration settings
+- **audit_logs**: System activity audit logs
+- **request_sequences**: Sequence tracking for request number generation
 
 ## 🔐 Security Features
 
 - **Password Security**: SHA-256 hashing for password storage
-- **Session Management**: Configurable session timeout (default: 30 minutes)
 - **Input Validation**: Comprehensive input validation and sanitization
 - **SQL Injection Prevention**: Parameterized queries throughout
 - **OTP Verification**: Time-based OTP (expires in 10 minutes) for email verification
-- **Rate Limiting**: Maximum login attempts (default: 3) with account lockout
+- **Rate Limiting**: Maximum login attempts (default: 3) with account lockout (30 minutes)
 - **Role-Based Access Control**: Granular permissions for different user roles
 - **Secure Password Reset**: OTP-based password recovery system
 
 ## 💳 Payment Integration
 
 The system integrates with PayMongo for payment processing:
-- Secure payment processing
-- Real-time payment status updates
-- Webhook support for payment notifications
+- Secure payment processing via PayMongo API
+- Payment status tracking
+- Webhook support for payment notifications (optional)
 - Payment history tracking
 
 ## 📧 Email Integration
 
 Automated email notifications using async SMTP for:
 - OTP verification codes (with expiration time)
-- Request status updates (pending, processing, ready, completed)
-- Payment confirmations and receipts
-- Password reset links and OTP codes
-- System notifications and alerts
+- Document request confirmation emails
+- Document ready notifications with attachments
+- Password reset OTP codes
 
 ## 🎨 User Interface
 

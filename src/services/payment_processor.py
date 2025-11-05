@@ -618,11 +618,25 @@ class PayMongoProcessor:
             
             documents_updated = cursor.rowcount
             
-            # Verify the updates
+            # Get payment details for receipt email
             cursor.execute("""
-                SELECT dr.request_number, dr.status, dr.payment_status, p.status as payment_table_status
+                SELECT 
+                    dr.request_number, 
+                    dr.status, 
+                    dr.payment_status, 
+                    dr.total_amount,
+                    dr.quantity,
+                    dt.name as document_name,
+                    p.status as payment_table_status,
+                    p.reference_number,
+                    p.paid_at,
+                    u.email as student_email,
+                    CONCAT(s.first_name, ' ', s.last_name) as student_name
                 FROM document_requests dr
                 LEFT JOIN payments p ON dr.request_id = p.request_id
+                LEFT JOIN document_types dt ON dr.document_type_id = dt.document_type_id
+                LEFT JOIN students s ON dr.student_id = s.student_id
+                LEFT JOIN users u ON s.user_id = u.user_id
                 WHERE dr.request_id = %s
             """, (request_id,))
             
@@ -631,11 +645,48 @@ class PayMongoProcessor:
             connection.commit()
             
             if result:
-                request_number, doc_status, payment_status, payment_table_status = result
+                request_number = result.get('request_number')
+                doc_status = result.get('status')
+                payment_status = result.get('payment_status')
+                payment_table_status = result.get('payment_table_status')
+                
                 print(f"✅ WEBHOOK SUCCESS - Request: {request_number}")
                 print(f"✅ Document Status: {doc_status}")
                 print(f"✅ Payment Status: {payment_status}")
                 print(f"✅ Payments Table Status: {payment_table_status}")
+                
+                # Send payment receipt email
+                student_email = result.get('student_email')
+                if student_email:
+                    try:
+                        from utils.utils import email_service
+                        from utils.async_utils import safe_async_run
+                        
+                        payment_details = {
+                            'student_name': result.get('student_name') or 'Student',
+                            'request_number': request_number,
+                            'amount': float(result.get('total_amount') or 0),
+                            'payment_method': 'Online',
+                            'reference_number': result.get('reference_number') or checkout_session_id,
+                            'transaction_id': checkout_session_id,
+                            'payment_date': result.get('paid_at') or datetime.now(),
+                            'document_name': result.get('document_name') or 'Document',
+                            'quantity': result.get('quantity') or 1
+                        }
+                        
+                        # Send receipt email asynchronously
+                        def send_receipt():
+                            safe_async_run(
+                                email_service.send_payment_receipt,
+                                student_email,
+                                payment_details
+                            )
+                        
+                        import threading
+                        threading.Thread(target=send_receipt, daemon=True).start()
+                        print(f"📧 Payment receipt email queued for: {student_email}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to send payment receipt email: {e}")
                 
             print(f"📊 Database updates - Payments: {payments_updated}, Documents: {documents_updated}")
             return True
