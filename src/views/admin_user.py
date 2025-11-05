@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import DB_CONFIG
 from utils.async_utils import safe_async_run
+from utils.audit_logger import audit_logger
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -810,7 +811,11 @@ class AdminUserManager:
             if not connection:
                 return False
                 
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get old values for audit log
+            cursor.execute("SELECT email, user_type, is_verified FROM users WHERE user_id = %s", (user_id,))
+            old_data = cursor.fetchone()
             
             if new_password:
                 # Import hashlib for password hashing
@@ -829,7 +834,27 @@ class AdminUserManager:
                     WHERE user_id = %s
                 """, (email, user_type, is_verified, user_id))
             
+            # Get new values for audit log
+            cursor.execute("SELECT email, user_type, is_verified FROM users WHERE user_id = %s", (user_id,))
+            new_data = cursor.fetchone()
+            
             connection.commit()
+            
+            # Log user update
+            admin_user_id = self.user_data.get('user_id') if hasattr(self, 'user_data') and self.user_data else None
+            if admin_user_id and old_data and new_data:
+                old_values = dict(old_data)
+                new_values = dict(new_data)
+                if old_values != new_values:
+                    audit_logger.log_update(
+                        user_id=admin_user_id,
+                        table_name='users',
+                        record_id=user_id,
+                        old_values=old_values,
+                        new_values=new_values,
+                        connection=connection
+                    )
+            
             cursor.close()
             connection.close()
             
@@ -856,7 +881,12 @@ class AdminUserManager:
                 messagebox.showerror("Database Error", "Could not connect to database")
                 return
                 
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get old status
+            cursor.execute("SELECT is_active FROM users WHERE user_id = %s", (user['user_id'],))
+            old_data = cursor.fetchone()
+            old_status = old_data.get('is_active') if old_data else None
             
             cursor.execute("""
                 UPDATE users 
@@ -865,6 +895,19 @@ class AdminUserManager:
             """, (new_status, user['user_id']))
             
             connection.commit()
+            
+            # Log status change
+            admin_user_id = self.user_data.get('user_id') if hasattr(self, 'user_data') and self.user_data else None
+            if admin_user_id and old_status is not None and old_status != new_status:
+                audit_logger.log_update(
+                    user_id=admin_user_id,
+                    table_name='users',
+                    record_id=user['user_id'],
+                    old_values={'is_active': old_status},
+                    new_values={'is_active': new_status},
+                    connection=connection
+                )
+            
             cursor.close()
             connection.close()
             
@@ -1172,7 +1215,26 @@ class AdminUserManager:
                 VALUES (%s, %s, %s, %s, %s, %s, NOW())
             """, (username, email, user_type, hashed_password, True, is_verified))
             
+            new_user_id = cursor.lastrowid
             connection.commit()
+            
+            # Log user creation
+            admin_user_id = self.user_data.get('user_id') if hasattr(self, 'user_data') and self.user_data else None
+            if admin_user_id:
+                audit_logger.log_create(
+                    user_id=admin_user_id,
+                    table_name='users',
+                    record_id=new_user_id,
+                    new_values={
+                        'username': username,
+                        'email': email,
+                        'user_type': user_type,
+                        'is_active': True,
+                        'is_verified': is_verified
+                    },
+                    connection=connection
+                )
+            
             cursor.close()
             connection.close()
             

@@ -2,6 +2,7 @@ from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 import mysql.connector
 from utils.utils import UtilityFunctions
+from utils.audit_logger import audit_logger
 from config.config import DB_CONFIG, SYSTEM_CONFIG
 import sys
 import os
@@ -264,6 +265,14 @@ class LoginWindow:
                 """, (user['user_id'],))
                 db_connection.commit()
                 
+                # Log successful login
+                audit_logger.log_user_action(
+                    user_id=user['user_id'],
+                    action="LOGIN_SUCCESS",
+                    description=f"User logged in: {user.get('email', user.get('username', 'Unknown'))}",
+                    connection=db_connection
+                )
+                
                 # Prepare user data for session
                 user_data = {
                     'user_id': user['user_id'],
@@ -306,6 +315,14 @@ class LoginWindow:
                     """, (current_attempts, lockout_until, user['user_id']))
                     db_connection.commit()
                     
+                    # Log account lockout
+                    audit_logger.log_user_action(
+                        user_id=user['user_id'],
+                        action="ACCOUNT_LOCKED",
+                        description=f"Account locked due to {max_attempts} failed login attempts",
+                        connection=db_connection
+                    )
+                    
                     messagebox.showerror(
                         "Account Locked",
                         f"Too many failed login attempts. Your account has been locked for {lockout_minutes} minutes.\n\n"
@@ -319,6 +336,14 @@ class LoginWindow:
                         WHERE user_id = %s
                     """, (current_attempts, user['user_id']))
                     db_connection.commit()
+                    
+                    # Log failed login attempt
+                    audit_logger.log_user_action(
+                        user_id=user['user_id'],
+                        action="LOGIN_FAILED",
+                        description=f"Failed login attempt ({current_attempts}/{max_attempts})",
+                        connection=db_connection
+                    )
                     
                     remaining_attempts = max_attempts - current_attempts
                     messagebox.showerror(

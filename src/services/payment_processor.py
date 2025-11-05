@@ -655,6 +655,32 @@ class PayMongoProcessor:
                 print(f"✅ Payment Status: {payment_status}")
                 print(f"✅ Payments Table Status: {payment_table_status}")
                 
+                # Log payment success
+                try:
+                    from utils.audit_logger import audit_logger
+                    # Get student user_id for audit log (use dictionary cursor)
+                    audit_cursor = connection.cursor(dictionary=True)
+                    audit_cursor.execute("""
+                        SELECT u.user_id FROM students s
+                        JOIN users u ON s.user_id = u.user_id
+                        WHERE s.student_id = (SELECT student_id FROM document_requests WHERE request_id = %s)
+                    """, (request_id,))
+                    student_user = audit_cursor.fetchone()
+                    student_user_id = student_user.get('user_id') if student_user else None
+                    audit_cursor.close()
+                    
+                    if student_user_id:
+                        audit_logger.log_update(
+                            user_id=student_user_id,
+                            table_name='document_requests',
+                            record_id=request_id,
+                            old_values={'payment_status': 'pending', 'status': 'payment_pending'},
+                            new_values={'payment_status': 'paid', 'status': 'processing'},
+                            connection=connection
+                        )
+                except Exception as e:
+                    print(f"⚠️ Failed to log payment audit: {e}")
+                
                 # Send payment receipt email
                 student_email = result.get('student_email')
                 if student_email:

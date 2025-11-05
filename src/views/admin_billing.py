@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import DB_CONFIG
 from utils.async_utils import safe_async_run
+from utils.audit_logger import audit_logger
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -578,6 +579,30 @@ class AdminBillingManager:
             connection.close()
             
             print(f"✅ Payment {payment['reference_number'] or payment['payment_id']} approved successfully")
+            
+            # Log payment approval
+            admin_user_id = self.user_data.get('user_id') if hasattr(self, 'user_data') and self.user_data else None
+            if admin_user_id and receipt_data:
+                try:
+                    audit_logger.log_update(
+                        user_id=admin_user_id,
+                        table_name='payments',
+                        record_id=payment['payment_id'],
+                        old_values={'status': 'pending'},
+                        new_values={'status': 'success', 'paid_at': datetime.now()},
+                        connection=connection
+                    )
+                    # Also log document_requests update
+                    audit_logger.log_update(
+                        user_id=admin_user_id,
+                        table_name='document_requests',
+                        record_id=payment['request_id'],
+                        old_values={'payment_status': 'pending'},
+                        new_values={'payment_status': 'paid', 'status': 'processing'},
+                        connection=connection
+                    )
+                except Exception as e:
+                    print(f"⚠️ Failed to log payment approval audit: {e}")
             
             # Send payment receipt email
             if receipt_data and receipt_data.get('student_email'):

@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.config import DB_CONFIG
 from utils.async_utils import safe_async_run
 from utils.utils import email_service
+from utils.audit_logger import audit_logger
 from views.admin_upload_docu import AdminUploadDocumentWindow
 from views.view_docu_attachment import DocumentAttachmentViewer
 
@@ -1212,7 +1213,12 @@ class AdminRequestManager:
             if not conn:
                 print("❌ No DB connection available for updating request status.")
                 return False
-            cursor = conn.cursor()
+            cursor = conn.cursor(dictionary=True)
+            
+            # Get old values for audit log
+            cursor.execute("SELECT status, payment_status, processed_date, ready_date, completed_date FROM document_requests WHERE request_id = %s", (request_id,))
+            old_data = cursor.fetchone()
+            
             fields = []
             params = []
             if status is not None:
@@ -1237,7 +1243,29 @@ class AdminRequestManager:
             params.append(request_id)
             sql = f"UPDATE document_requests SET {', '.join(fields)} WHERE request_id = %s"
             cursor.execute(sql, tuple(params))
+            
+            # Get new values for audit log
+            cursor.execute("SELECT status, payment_status, processed_date, ready_date, completed_date FROM document_requests WHERE request_id = %s", (request_id,))
+            new_data = cursor.fetchone()
+            
             conn.commit()
+            
+            # Log the update
+            admin_user_id = self.user_data.get('user_id') if self.user_data else None
+            if admin_user_id and old_data and new_data:
+                old_values = dict(old_data)
+                new_values = dict(new_data)
+                # Only log if there are actual changes
+                if old_values != new_values:
+                    audit_logger.log_update(
+                        user_id=admin_user_id,
+                        table_name='document_requests',
+                        record_id=request_id,
+                        old_values=old_values,
+                        new_values=new_values,
+                        connection=conn
+                    )
+            
             cursor.close()
             conn.close()
             

@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import your existing modules
 from config.config import DB_CONFIG
 from utils.async_utils import safe_async_run
+from utils.audit_logger import audit_logger
 
 OUTPUT_PATH = Path(__file__).parent
 
@@ -509,27 +510,44 @@ class DocumentRequestWindow:
             # Get the inserted request ID
             request_id = cursor.lastrowid
             
-            # Get user_id for the student to create notification
+            # Get user_id for the student to create notification and audit logging
             cursor.execute("""
                 SELECT user_id FROM students WHERE student_id = %s
             """, (self.student_id,))
             
             student_result = cursor.fetchone()
+            user_id = student_result.get('user_id') if student_result else None
             
-            if student_result and student_result.get('user_id'):
+            if user_id:
                 # Create notification for the student
                 cursor.execute("""
                     INSERT INTO notifications (
                         user_id, title, message, notification_type, related_request_id
                     ) VALUES (%s, %s, %s, %s, %s)
                 """, (
-                    student_result['user_id'],
+                    user_id,
                     "Document Request Submitted",
                     f"Your request for {self.selected_document_type['name']} has been submitted successfully. Request #: {request_number}",
                     "success",
                     request_id
                 ))
-                print(f"✓ Notification created for user_id: {student_result['user_id']}")
+                print(f"✓ Notification created for user_id: {user_id}")
+                
+                # Log request creation
+                audit_logger.log_create(
+                    user_id=user_id,
+                    table_name='document_requests',
+                    record_id=request_id,
+                    new_values={
+                        'request_number': request_number,
+                        'document_type': self.selected_document_type['name'],
+                        'quantity': quantity,
+                        'total_amount': total_amount,
+                        'delivery_mode': self.delivery_mode,
+                        'status': 'payment_pending'
+                    },
+                    connection=connection
+                )
             else:
                 print(f"⚠️ Warning: No user_id found for student_id: {self.student_id}")
                 # Continue without notification rather than failing the entire request

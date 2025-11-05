@@ -11,6 +11,7 @@ from views.forgotpass import ForgotPasswordWindow
 from views.home import HomeWindow
 from views.admin_dashboard import AdminDashboard
 from config.config import DB_CONFIG, APP_CONFIG
+from utils.audit_logger import audit_logger
 import os, sys
 import time
 from pathlib import Path
@@ -217,7 +218,7 @@ class DocumentRequestSystem:
         self.current_user = user_data
         self.user_type = user_type
 
-        # Log login activity
+        # Log login activity (already logged in login.py, but log session start here)
         if APP_CONFIG['debug']:
             print(f"✓ User logged in: {user_data['email']} ({user_type})")
 
@@ -278,8 +279,19 @@ class DocumentRequestSystem:
     def logout(self):
         """Logout user and return to login - resize to login size"""
         print("Logging out user...")  # Debug
-        if self.current_user and APP_CONFIG['debug']:
-            print(f"✓ User logged out: {self.current_user['email']}")
+        
+        # Log logout before clearing user data
+        if self.current_user:
+            user_id = self.current_user.get('user_id')
+            if user_id:
+                audit_logger.log_user_action(
+                    user_id=user_id,
+                    action="LOGOUT",
+                    description=f"User logged out: {self.current_user.get('email', 'Unknown')}"
+                )
+            
+            if APP_CONFIG['debug']:
+                print(f"✓ User logged out: {self.current_user['email']}")
 
         self.current_user = None
         self.user_type = None

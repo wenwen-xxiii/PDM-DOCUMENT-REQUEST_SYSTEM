@@ -2,6 +2,7 @@
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox
 from utils.utils import UtilityFunctions
+from utils.audit_logger import audit_logger
 from config.config import DB_CONFIG
 import mysql.connector
 import aiomysql
@@ -249,6 +250,11 @@ class PasswordResetWindow:
                 messagebox.showerror("Error", "Failed to reset password. User not found or account not verified.")
                 return
             
+            # Get user_id before updating password
+            await cursor.execute("SELECT user_id FROM users WHERE email = %s", (self.user_email,))
+            user_result = await cursor.fetchone()
+            user_id = user_result[0] if user_result else None
+            
             # Update the password and unlock the account (reset login attempts)
             hashed_password = UtilityFunctions.hash_password(new_password)
             await cursor.execute(
@@ -259,6 +265,19 @@ class PasswordResetWindow:
             if cursor.rowcount == 0:
                 messagebox.showerror("Error", "Failed to reset password. User not found.")
                 return
+            
+            # Log password reset
+            if user_id:
+                # Get connection for audit logging (async context)
+                import mysql.connector
+                sync_connection = mysql.connector.connect(**DB_CONFIG)
+                audit_logger.log_user_action(
+                    user_id=user_id,
+                    action="PASSWORD_RESET",
+                    description="User password reset via forgot password flow",
+                    connection=sync_connection
+                )
+                sync_connection.close()
                 
             await db_connection.commit()
             messagebox.showinfo("Success", "Password reset successfully! Your account has been unlocked. You can now login with your new password.")
