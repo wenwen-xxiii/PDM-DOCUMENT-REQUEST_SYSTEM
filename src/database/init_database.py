@@ -116,7 +116,6 @@ class DatabaseInitializer:
                     position VARCHAR(100) NOT NULL,
                     department VARCHAR(100) NOT NULL,
                     contact_number VARCHAR(20),
-                    office_location VARCHAR(100),
                     is_active BOOLEAN DEFAULT TRUE,
                     hire_date DATE,
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -251,8 +250,7 @@ class DatabaseInitializer:
                     semester ENUM('1st', '2nd', 'Summer') NOT NULL,
                     academic_year VARCHAR(9) NOT NULL,
                     units_enrolled INT,
-                    status ENUM('Regular', 'Irregular', 'Conditional') DEFAULT 'Regular',
-                    gpa DECIMAL(3,2),
+                    status ENUM('Regular', 'Irregular') DEFAULT 'Regular',
                     has_inc BOOLEAN DEFAULT FALSE,
                     has_dropped BOOLEAN DEFAULT FALSE,
                     record_date DATE NOT NULL,

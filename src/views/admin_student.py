@@ -1,6 +1,6 @@
 # adminstudent.py - Admin Student Manager for Registrars
 from pathlib import Path
-from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel
+from tkinter import Canvas, Frame, Label, Button, Entry, StringVar, messagebox, Scrollbar, Toplevel, ttk
 import mysql.connector
 from mysql.connector import Error
 import sys
@@ -9,6 +9,7 @@ from datetime import datetime
 import asyncio
 import threading
 import concurrent.futures
+import re
 
 # Add the parent directory to the path to import your modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -764,10 +765,10 @@ class AdminStudentManager:
                     cursor.execute("""
                         INSERT INTO students (user_id, student_number, first_name, last_name, middle_name, 
                                            course, year_level, contact_number, address, enrollment_status, 
-                                           date_enrolled, has_obligations, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                           date_enrolled, has_obligations)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (user_id, student_number, first_name, last_name, middle_name, course, year_level, 
-                          contact_number, address, 'Enrolled', datetime.now(), False, datetime.now()))
+                          contact_number, address, 'Enrolled', datetime.now(), False))
                     
                     imported_count += 1
                     
@@ -878,6 +879,23 @@ class AdminStudentManager:
         student_no_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         student_no_entry.place(x=left_column_x, y=field_y_start + 20, width=field_width, height=30)
         
+        # Add placeholder text for student number format
+        student_no_entry.insert(0, "PDM-0000-000000")
+        student_no_entry.config(fg="#999999")
+        
+        def on_student_no_focus_in(event):
+            if student_no_entry.get() == "PDM-0000-000000":
+                student_no_entry.delete(0, "end")
+                student_no_entry.config(fg="#000000")
+        
+        def on_student_no_focus_out(event):
+            if not student_no_entry.get().strip():
+                student_no_entry.insert(0, "PDM-0000-000000")
+                student_no_entry.config(fg="#999999")
+        
+        student_no_entry.bind("<FocusIn>", on_student_no_focus_in)
+        student_no_entry.bind("<FocusOut>", on_student_no_focus_out)
+        
         # First Name field
         canvas.create_text(
             left_column_x, field_y_start + field_spacing,
@@ -902,13 +920,31 @@ class AdminStudentManager:
         middle_name_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         middle_name_entry.place(x=left_column_x, y=field_y_start + (field_spacing * 3) + 20, width=field_width, height=30)
         
-        # Course field
+        # Course field - dropdown from database (spans both columns)
         canvas.create_text(
-            left_column_x, field_y_start + (field_spacing * 4),
-            text="Course:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
+            80, field_y_start + (field_spacing * 4),
+            text="Course:", fill="#000000", font=("Inter", 11, "bold"), anchor="nw"
         )
-        course_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
-        course_entry.place(x=left_column_x, y=field_y_start + (field_spacing * 4) + 20, width=field_width, height=30)
+        course_var = StringVar()
+        course_combo = ttk.Combobox(dialog, textvariable=course_var, width=35, state="readonly")
+        # Span both columns: x=80 (same as address), width=340 (same as address)
+        course_combo.place(x=80, y=field_y_start + (field_spacing * 4) + 20, width=340, height=30)
+        
+        # Load courses from database
+        try:
+            connection = self.get_db_connection()
+            if connection:
+                cursor = connection.cursor()
+                cursor.execute("SELECT DISTINCT course FROM students WHERE course IS NOT NULL AND course != '' ORDER BY course ASC")
+                courses = [row[0] for row in cursor.fetchall()]
+                course_combo['values'] = tuple(courses) if courses else ('BS Information Technology', 'BS Computer Science', 'BS Business Administration')
+                cursor.close()
+                connection.close()
+            else:
+                course_combo['values'] = ('BS Information Technology', 'BS Computer Science', 'BS Business Administration')
+        except Exception as e:
+            print(f"⚠️ Error loading courses: {e}")
+            course_combo['values'] = ('BS Information Technology', 'BS Computer Science', 'BS Business Administration')
         
         # Right Column Fields
         # Year Level field
@@ -916,7 +952,6 @@ class AdminStudentManager:
             right_column_x, field_y_start,
             text="Year Level:", fill="#000000", font=("Inter", 11, "bold"), anchor="w"
         )
-        from tkinter import ttk
         year_level_var = StringVar()
         year_level_combo = ttk.Combobox(dialog, textvariable=year_level_var, width=18, state="readonly")
         year_level_combo['values'] = ('1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
@@ -929,6 +964,19 @@ class AdminStudentManager:
         )
         contact_entry = Entry(dialog, font=("Inter", 10), width=20, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         contact_entry.place(x=right_column_x, y=field_y_start + field_spacing + 20, width=field_width, height=30)
+        
+        # Validation for contact number - only allow numbers
+        def validate_contact_input(char):
+            return char.isdigit() or char == ""
+        
+        def on_contact_key_release(event):
+            value = contact_entry.get()
+            # Limit to 11 digits
+            if len(value) > 11:
+                contact_entry.delete(11, "end")
+        
+        contact_entry.config(validate="key", validatecommand=(dialog.register(validate_contact_input), "%S"))
+        contact_entry.bind("<KeyRelease>", on_contact_key_release)
         
         # Email field
         canvas.create_text(
@@ -970,12 +1018,13 @@ class AdminStudentManager:
         
         # Populate fields if editing
         if student:
+            student_no_entry.delete(0, "end")
             student_no_entry.insert(0, student['student_number'])
-            student_no_entry.config(state="readonly")
+            student_no_entry.config(state="readonly", fg="#000000")
             first_name_entry.insert(0, student['first_name'])
             last_name_entry.insert(0, student['last_name'])
             middle_name_entry.insert(0, student['middle_name'] or "")
-            course_entry.insert(0, student['course'])
+            course_var.set(student['course'])
             year_level_var.set(student['year_level'])
             contact_entry.insert(0, student['contact_number'] or "")
             address_text.insert("1.0", student['address'] or "")
@@ -991,13 +1040,36 @@ class AdminStudentManager:
             first_name = first_name_entry.get().strip()
             last_name = last_name_entry.get().strip()
             middle_name = middle_name_entry.get().strip()
-            course = course_entry.get().strip()
+            course = course_var.get().strip()
             year_level = year_level_var.get()
             contact_number = contact_entry.get().strip()
             address = address_text.get("1.0", "end").strip()
             email = email_entry.get().strip()
             has_obligations = has_obligations_var.get()
             obligations_details = obligations_text.get("1.0", "end").strip() if has_obligations else ""
+            
+            # Validate student number format: PDM-0000-000000
+            student_no_pattern = r'^PDM-\d{4}-\d{6}$'
+            if not student:
+                # Only validate format when adding new student
+                if student_number == "PDM-0000-000000" or not student_number:
+                    messagebox.showerror("Error", "Please enter a valid student number in format: PDM-0000-000000")
+                    return
+                if not re.match(student_no_pattern, student_number):
+                    messagebox.showerror("Error", "Student number must be in format: PDM-0000-000000\nExample: PDM-2023-123456")
+                    return
+            
+            # Validate contact number: 11 digits, starts with "09", numbers only
+            if contact_number:
+                if not contact_number.isdigit():
+                    messagebox.showerror("Error", "Contact number must contain only numbers")
+                    return
+                if len(contact_number) != 11:
+                    messagebox.showerror("Error", "Contact number must be exactly 11 digits")
+                    return
+                if not contact_number.startswith("09"):
+                    messagebox.showerror("Error", "Contact number must start with '09'")
+                    return
             
             if not all([student_number, first_name, last_name, course, year_level]):
                 messagebox.showerror("Error", "Student number, first name, last name, course, and year level are required")
@@ -1225,10 +1297,10 @@ class AdminStudentManager:
             cursor.execute("""
                 INSERT INTO students (user_id, student_number, first_name, last_name, middle_name, 
                                    course, year_level, contact_number, address, enrollment_status, 
-                                   date_enrolled, has_obligations, obligations_details, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                   date_enrolled, has_obligations, obligations_details)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (user_id, student_number, first_name, last_name, middle_name, course, year_level, 
-                  contact_number, address, 'Enrolled', datetime.now(), has_obligations, obligations_details, datetime.now()))
+                  contact_number, address, 'Enrolled', datetime.now(), has_obligations, obligations_details))
             
             connection.commit()
             cursor.close()

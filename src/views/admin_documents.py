@@ -501,7 +501,7 @@ class AdminDocumentManager:
         name_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         name_entry.place(x=150, y=field_y_start + field_spacing + 20, width=200, height=30)
         
-        # Fee Amount field
+        # Fee Amount field (decimal validation)
         canvas.create_text(
             center_x, field_y_start + (field_spacing * 2),
             text="Fee Amount:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
@@ -509,13 +509,35 @@ class AdminDocumentManager:
         fee_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         fee_entry.place(x=150, y=field_y_start + (field_spacing * 2) + 20, width=200, height=30)
         
-        # Processing Days field
+        # Validation for fee amount - only allow decimal numbers
+        def validate_fee_input(char):
+            # Allow digits, single decimal point, and backspace/delete
+            if char == "":
+                return True
+            if char.isdigit():
+                return True
+            if char == ".":
+                # Only allow one decimal point
+                current = fee_entry.get()
+                return "." not in current
+            return False
+        
+        fee_entry.config(validate="key", validatecommand=(dialog.register(validate_fee_input), "%S"))
+        
+        # Processing Days field (integer validation)
         canvas.create_text(
             center_x, field_y_start + (field_spacing * 3),
             text="Processing Days:", fill="#000000", font=("Inter", 12, "bold"), anchor="center"
         )
         processing_entry = Entry(dialog, font=("Inter", 10), width=30, justify="center", bg="#FFFFFF", relief="solid", bd=1)
         processing_entry.place(x=150, y=field_y_start + (field_spacing * 3) + 20, width=200, height=30)
+        
+        # Validation for processing days - only allow integers
+        def validate_processing_input(char):
+            # Only allow digits
+            return char.isdigit() or char == ""
+        
+        processing_entry.config(validate="key", validatecommand=(dialog.register(validate_processing_input), "%S"))
         
         # Description field
         canvas.create_text(
@@ -569,11 +591,24 @@ class AdminDocumentManager:
                 messagebox.showerror("Error", "All fields are required")
                 return
             
+            # Validate fee amount (must be decimal/float)
             try:
                 fee_amount = float(fee_str)
-                processing_days = int(processing_str)
+                if fee_amount <= 0:
+                    messagebox.showerror("Error", "Fee amount must be a positive number")
+                    return
             except ValueError:
-                messagebox.showerror("Error", "Fee amount and processing days must be valid numbers")
+                messagebox.showerror("Error", "Fee amount must be a valid decimal number\nExample: 100.00 or 100")
+                return
+            
+            # Validate processing days (must be integer)
+            try:
+                processing_days = int(processing_str)
+                if processing_days < 0:
+                    messagebox.showerror("Error", "Processing days must be a positive whole number")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "Processing days must be a valid whole number (integer)\nExample: 5, 10, 15")
                 return
             
             # Show loading indicator
