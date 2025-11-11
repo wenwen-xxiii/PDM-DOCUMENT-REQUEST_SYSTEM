@@ -376,9 +376,9 @@ class DatabaseInitializer:
             
             # Create cashier staff record
             cursor.execute("""
-                INSERT IGNORE INTO staff (user_id, staff_number, first_name, last_name, position, department, office_location) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (cashier_user_id, 'CASH001', 'Juan', 'Dela Cruz', 'Cashier', 'Finance Office', 'Cashier\'s Office'))
+                INSERT IGNORE INTO staff (user_id, staff_number, first_name, last_name, position, department) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (cashier_user_id, 'CASH001', 'Juan', 'Dela Cruz', 'Cashier', 'Finance Office'))
             
             # Insert document types with codes
             document_types = [
